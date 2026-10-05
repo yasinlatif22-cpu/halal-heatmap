@@ -29,6 +29,16 @@ class DebtResolution:
     note: str
 
 
+def near_threshold_flag(ratio: float, passed: bool, threshold: Threshold, near: NearThreshold) -> bool:
+    """A passing ratio within the margin of its limit. The screen and the site export both use it,
+    so a changed margin means the same thing in both."""
+    if near.mode == "relative":
+        floor = threshold.limit - near.margin * threshold.limit
+    else:
+        floor = threshold.limit - near.margin
+    return passed and (ratio > floor or math.isclose(ratio, floor))
+
+
 def evaluate_ratio(
     name: str, numerator: float | None, denominator: float | None, threshold: Threshold, near: NearThreshold
 ) -> RatioResult | None:
@@ -38,11 +48,7 @@ def evaluate_ratio(
     ratio = numerator / denominator
     passed = threshold.passes(ratio)
     headroom = threshold.limit - ratio
-    if near.mode == "relative":
-        floor = threshold.limit - near.margin * threshold.limit
-    else:
-        floor = threshold.limit - near.margin
-    is_near = passed and (ratio > floor or math.isclose(ratio, floor))
+    is_near = near_threshold_flag(ratio, passed, threshold, near)
     return RatioResult(
         name=name,
         numerator=numerator,

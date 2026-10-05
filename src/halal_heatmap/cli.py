@@ -7,8 +7,10 @@ import json
 import sys
 from collections import Counter
 from datetime import date
+from pathlib import Path
 
 from halal_heatmap.config import DENOMINATORS, RATIOS, ConfigError, load_config
+from halal_heatmap.export import build_site, write_site
 from halal_heatmap.facts import UsedFact
 from halal_heatmap.overrides import load_overrides
 from halal_heatmap.runner import ForwardOnlyError, run_screen, supersede_run, update
@@ -274,6 +276,29 @@ def _changes(args) -> int:
     return 0
 
 
+def _export(args) -> int:
+    if not Path(args.db).exists():
+        print(f"error: no database at {args.db}", file=sys.stderr)
+        return 1
+    cfg = load_config(args.config)
+    overrides = load_overrides(args.overrides)
+    prices = None if args.no_prices else YFinancePrices()
+    store = Store(args.db)
+    try:
+        payloads = build_site(store, cfg, overrides, prices)
+    finally:
+        store.close()
+    for path in write_site(payloads, args.out):
+        print(f"wrote {path}")
+    meta = payloads["meta.json"]
+    print(f"{meta['counts']['stocks']} stocks as of {meta['screen_date']}, config {meta['config_hash']}")
+    if not meta["config_matches"]:
+        print(f"warning: current config is {meta['current_config_hash']}, not the hash the data was screened under")
+    if meta["daily_change"]["failed"]:
+        print(f"warning: no daily price change for {', '.join(meta['daily_change']['failed'])}", file=sys.stderr)
+    return 0
+
+
 def _supersede(args) -> int:
     store = Store(args.db)
     try:
@@ -315,6 +340,13 @@ def main(argv: list[str] | None = None) -> int:
     changes.add_argument("--since", help="only from this screen date, YYYY-MM-DD")
     changes.add_argument("--db", default="data/screens.db")
     changes.set_defaults(func=_changes)
+    export = sub.add_parser("export", help="write the static site's data from the latest valid screens")
+    export.add_argument("--db", default="data/screens.db")
+    export.add_argument("--config", default="config.yaml")
+    export.add_argument("--overrides", default="overrides.yaml")
+    export.add_argument("--out", default="web/data", help="directory for screens.json, changes.json, meta.json")
+    export.add_argument("--no-prices", action="store_true", help="leave out the daily price change (no network)")
+    export.set_defaults(func=_export)
     supersede = sub.add_parser("supersede-run", help="mark a stored run as invalid so nothing uses it")
     supersede.add_argument("run_id", type=int)
     supersede.add_argument("--reason", required=True)

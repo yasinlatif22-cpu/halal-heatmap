@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Halal Heatmap: S&amp;P 500 Shariah screen</title>
+  <meta name="description" content="Automated AAOIFI-based Shariah screen of S&amp;P 500 stocks. Not a fatwa and not investment advice.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1>Halal Heatmap</h1>
+      <p class="sub" id="subtitle">Loading the latest screen…</p>
+      <details class="unsized" id="unsized" hidden>
+        <summary><span id="unsized-count">0</span> stocks have no market cap and are left off the map</summary>
+        <p class="muted">Each is listed with its verdict reason. The map sizes stocks by current market cap, so these cannot be drawn.</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th scope="col">Ticker</th><th scope="col">Company</th><th scope="col">Status</th><th scope="col">Reason</th></tr></thead>
+            <tbody id="unsized-list"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div id="banner" class="banner" hidden role="status"></div>
+    <p id="load-error" class="banner error" hidden role="alert"></p>
+  </div>
+
+  <main class="wrap layout" id="app" hidden>
+    <section class="map" aria-labelledby="map-heading">
+      <h2 id="map-heading" class="visually-hidden">Map of stocks</h2>
+
+      <form class="controls" id="controls" onsubmit="return false">
+        <div class="field search">
+          <label for="q">Find a stock</label>
+          <input id="q" type="search" placeholder="Ticker or company name" autocomplete="off">
+        </div>
+
+        <fieldset class="group">
+          <legend>Colour tiles by</legend>
+          <label><input type="radio" name="colour" value="status" checked> Status</label>
+          <label id="colour-change-label"><input type="radio" name="colour" value="change" id="colour-change"> Daily price change</label>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Status</legend>
+          <label><input type="checkbox" name="status" value="pass" checked> Pass</label>
+          <label><input type="checkbox" name="status" value="needs_review" checked> Needs review</label>
+          <label><input type="checkbox" name="status" value="fail" checked> Fail</label>
+          <label><input type="checkbox" name="status" value="insufficient_data" checked> Insufficient data</label>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Near a limit</legend>
+          <label><input type="checkbox" id="near-only"> Only stocks within the margin of a limit <span class="mark" aria-hidden="true">◆</span></label>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Basis of interest income</legend>
+          <label><input type="checkbox" name="basis" value="disclosed" checked> Disclosed interest (gross)</label>
+          <label><input type="checkbox" name="basis" value="disclosed_partial" checked> Disclosed, summed over segments (partial) <span class="glyph" aria-hidden="true">○</span></label>
+          <label><input type="checkbox" name="basis" value="annual_fallback" checked> Annual figure (older) <span class="glyph" aria-hidden="true">○</span></label>
+          <label><input type="checkbox" name="basis" value="net_investment_income" checked> Net investment income <span class="glyph" aria-hidden="true">○</span></label>
+          <label><input type="checkbox" name="basis" value="upper_bound_cash" checked> Upper bound on cash <span class="glyph" aria-hidden="true">○</span></label>
+          <label><input type="checkbox" name="basis" value="upper_bound_total_assets" checked> Upper bound on total assets <span class="glyph" aria-hidden="true">○</span></label>
+          <label><input type="checkbox" name="basis" value="none" checked> No interest income figure</label>
+        </fieldset>
+
+        <fieldset class="group flags">
+          <legend>Has any of these flags</legend>
+          <label><input type="checkbox" name="flag" value="denominator"> <span class="glyph" aria-hidden="true">≠</span> Denominator-sensitive</label>
+          <label><input type="checkbox" name="flag" value="spot"> <span class="glyph" aria-hidden="true">↕</span> Spot divergence</label>
+          <label><input type="checkbox" name="flag" value="share"> <span class="glyph" aria-hidden="true">#</span> Share count flagged</label>
+          <label><input type="checkbox" name="flag" value="stale"> <span class="glyph" aria-hidden="true">!</span> Balance sheet out of date</label>
+          <label><input type="checkbox" name="flag" value="override"> <span class="glyph" aria-hidden="true">✎</span> Override applied</label>
+        </fieldset>
+
+        <div class="actions">
+          <p id="count" class="count" aria-live="polite"></p>
+          <button type="button" id="reset" class="link">Reset filters</button>
+        </div>
+      </form>
+
+      <div class="legend" id="legend" aria-label="Legend"></div>
+
+      <div id="treemap" class="treemap" role="img" aria-label="Treemap of S&amp;P 500 stocks sized by market cap"></div>
+      <p class="note">Tiles are sized by current market cap and grouped by sector. Tap or click a tile for its audit record. On a small screen, use the list below.</p>
+
+      <details class="list" id="list-wrap">
+        <summary>All stocks as a list (<span id="list-count">0</span>)</summary>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Ticker</th>
+                <th scope="col">Company</th>
+                <th scope="col">Status</th>
+                <th scope="col">Near a limit</th>
+                <th scope="col">Basis</th>
+                <th scope="col">Daily change</th>
+              </tr>
+            </thead>
+            <tbody id="list-body"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    <aside class="side" aria-label="Stock detail and recent changes">
+      <section class="panel" id="detail" tabindex="-1">
+        <h2>Stock detail</h2>
+        <p class="muted">Select a stock on the map or in the list to see its full audit record.</p>
+      </section>
+
+      <section class="panel" id="changes-panel">
+        <h2>Recent status changes</h2>
+        <label class="inline"><input type="checkbox" id="changes-pass-only"> Only changes into or out of pass</label>
+        <ol class="changes" id="changes"></ol>
+        <p id="changes-more-wrap"><button type="button" id="changes-more" class="link" hidden></button></p>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p class="disclaimer" id="disclaimer"></p>
+      <div class="foot-grid">
+        <div>
+          <h3>Thresholds</h3>
+          <ul id="thresholds"></ul>
+          <p id="near-desc" class="muted"></p>
+        </div>
+        <div>
+          <h3>Market cap method</h3>
+          <p id="mcap-desc"></p>
+        </div>
+        <div>
+          <h3>Data</h3>
+          <p id="data-desc"></p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.3/plotly.min.js"
+    integrity="sha384-MqL7Cy3itNqCI1Wlc926K0XhyRKJ/NMqTaytIIEB+QIdInOploxqRIHRKLlhPykM"
+    crossorigin="anonymous"></script>
+  <script src="app.js"></script>
+</body>
+</html>

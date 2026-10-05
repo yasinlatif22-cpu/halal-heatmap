@@ -296,6 +296,23 @@ class Store:
             (ticker,),
         ).fetchone()
 
+    def latest_results(self) -> list[sqlite3.Row]:
+        """The latest valid result of every ticker, in the order latest_result would pick it."""
+        return self.conn.execute(
+            "SELECT * FROM ("
+            "  SELECT r.*, ROW_NUMBER() OVER (PARTITION BY r.ticker ORDER BY r.screen_date DESC, r.id DESC) AS rn "
+            "  FROM screen_results r JOIN runs ON runs.id = r.run_id WHERE runs.superseded = 0"
+            ") WHERE rn = 1 ORDER BY ticker"
+        ).fetchall()
+
+    def latest_snapshot(self) -> tuple[str, dict[str, sqlite3.Row]] | None:
+        """The most recent constituent list, keyed by ticker."""
+        latest = self.conn.execute("SELECT MAX(snapshot_date) FROM constituents_snapshot").fetchone()[0]
+        if latest is None:
+            return None
+        rows = self.conn.execute("SELECT * FROM constituents_snapshot WHERE snapshot_date = ?", (latest,))
+        return latest, {row["ticker"]: row for row in rows}
+
     def result_before(self, ticker: str, result_id: int) -> sqlite3.Row | None:
         """The valid result a later one is compared with. History only moves forward, so a lower
         id is an earlier screen."""
