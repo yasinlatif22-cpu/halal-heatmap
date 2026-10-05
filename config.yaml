@@ -1,0 +1,376 @@
+# Every screening parameter lives in this file. Nothing in src/ hardcodes a threshold.
+# Items marked VERIFY are the ones to check against the current AAOIFI standard.
+
+screens:
+  # ratio passes when: ratio <operator> threshold. Operators: "<" or "<=".
+  debt:            # interest-bearing debt / market cap            VERIFY
+    threshold: 0.30
+    operator: "<"
+  cash:            # cash + interest-bearing securities / market cap  VERIFY
+    threshold: 0.30
+    operator: "<"
+  impure_income:   # impure income / revenue                       VERIFY
+    threshold: 0.05
+    operator: "<"
+
+market_cap:
+  driving: avg_12m            # spot | avg_12m | avg_36m. All three are always computed and stored.
+  window_months:
+    avg_12m: 12
+    avg_36m: 36
+  trading_days_per_month: 21
+  min_coverage: 0.90          # share of expected trading days needed for an average to count
+  max_spot_age_days: 7        # latest close older than this means no spot market cap
+  # Flag a company whose spot market cap and the average named here differ by more than this
+  # factor in either direction. A spin-off or similar event usually sits behind it. When the
+  # flag is set and the spot verdict is not a pass, a pass becomes insufficient_data.  project rule
+  spot_divergence_factor: 1.5
+  spot_divergence_against: avg_12m
+
+near_threshold:               # project rule, not from the standard
+  mode: relative              # relative: share of the threshold. absolute: ratio points.
+  margin: 0.10
+
+zero_debt:                    # project rule, not from the standard
+  # Missing debt tags count as 0 only if total liabilities is reported AND interest
+  # expense is absent or below this share of revenue. Otherwise insufficient_data.
+  max_interest_expense_to_revenue: 0.001
+  interest_expense_lookback_days: 460
+
+debt_plausibility:             # project rule, not from the standard
+  # Tagged debt is treated as understated when trailing interest expense exceeds this share of
+  # it. This can only turn a pass into insufficient_data. Debt reported as exactly 0 is checked
+  # against zero_debt.max_interest_expense_to_revenue instead.
+  max_interest_expense_to_debt: 0.25
+
+filings:
+  forms: ["10-K", "10-Q", "10-K/A", "10-Q/A"]
+  balance_sheet_anchor: [Assets]
+  max_period_age_days: 200    # older latest balance sheet means insufficient_data
+  annual_forms: ["10-K", "10-K/A"]
+  # A registrant that files one of these took over from an earlier registrant. If it has no
+  # entry under predecessors below, the audit record says so.
+  successor_forms: ["8-K12B", "8-K12G3"]
+
+# Successor CIK -> CIKs the same company filed under before a holding-company reorganisation.
+# Their filings are read as part of the successor's history.
+predecessors:
+  2115436: [34088]            # ExxonMobil Holdings Corp <- Exxon Mobil Corp (8-K12B filed 2026-07-01)
+  1996862: [1144519]          # Bunge Global SA <- Bunge Ltd (8-K12G3 filed 2023-11-01)
+  2011641: [1832433]          # Ferguson Enterprises Inc <- Ferguson plc (8-K12B filed 2024-08-01)
+
+periods:                      # how duration facts are recognised when building trailing 12 months
+  annual_min_days: 350
+  annual_max_days: 380
+  tolerance_days: 10
+
+overrides:
+  expiry_days: 365
+
+shares:
+  recent_days: 200            # a share tag is used only if it was filed this recently
+  tags:
+    # split_basis: the date a reported count is "as of" for split adjustment.
+    - tag: "dei:EntityCommonStockSharesOutstanding"
+      split_basis: end
+    - tag: "us-gaap:CommonStockSharesOutstanding"
+      split_basis: filed
+    - tag: "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic"
+      split_basis: filed
+  # A reported count is rejected when, after split adjustment, it is more than reject_multiple
+  # away from every one of its neighbouring filings (a mis-scaled cover page). The nearest
+  # valid count then applies. A change above flag_multiple between consecutive valid counts
+  # is flagged in the audit record for review and changes no verdict.   project rule
+  sanity:
+    reject_multiple: 5
+    flag_multiple: 1.5
+    neighbours: 2             # filings looked at on each side
+  # Only counts that can reach the market cap windows are checked: older filings are ignored.
+  # Per-class counts read from each filing's cover page. Used when none of the tags above is
+  # usable (companyfacts drops per-class counts) and for companies with two listed tickers.
+  # Market cap is summed over classes: a class with its own trading symbol is priced at that
+  # symbol, any other common class as set by `unlisted`.
+  classes:
+    tag: "dei:EntityCommonStockSharesOutstanding"
+    symbol_tag: "dei:TradingSymbol"
+    axis: "us-gaap:StatementClassOfStockAxis"
+    common_member_patterns: ["Common", "CapitalClass"]   # class member names counted as common stock
+    excluded_member_patterns: ["Preferred"]
+    unlisted: price_at_listed   # price_at_listed | exclude (exclude understates market cap)
+    # Tickers whose unlisted classes are always excluded, because they carry no economic rights.
+    exclude_unlisted_tickers: [ARES]
+
+# XBRL inputs. Each component lists alternative tag sets; the tags of an alternative are summed.
+# combine: max   -> use the alternative with the largest total. For numerators this is the
+#                   conservative choice when a company reports a stray partial value under one tag.
+# combine: first -> use the first alternative that has any tag reported at the period.
+# An input is missing when a required component is missing, or when no component is found at all.
+# Overlaps between components overstate the numerator, which is the conservative direction.
+inputs:
+  debt:
+    period: instant
+    combine: max
+    components:
+      - name: long_term_debt
+        required: false
+        any_of:
+          - [LongTermDebt]
+          - [LongTermDebtNoncurrent, LongTermDebtCurrent]
+          - [LongTermDebtAndCapitalLeaseObligations, LongTermDebtAndCapitalLeaseObligationsCurrent]
+          - [DebtLongtermAndShorttermCombinedAmount]
+          - [DebtAndCapitalLeaseObligations]
+          - [DebtInstrumentCarryingAmount]
+          - [SeniorNotes]
+          - [NotesPayable]
+          - [ConvertibleNotesPayableNoncurrent, ConvertibleNotesPayableCurrent]
+          - [ConvertibleNotesPayable]
+      - name: short_term_debt
+        required: false
+        any_of:
+          - [ShortTermBorrowings]
+          - [CommercialPaper, CommercialPaperNoncurrent, OtherShortTermBorrowings]
+          - [DebtCurrent]
+      - name: finance_leases
+        required: false
+        any_of:
+          - [FinanceLeaseLiability]
+          - [FinanceLeaseLiabilityNoncurrent, FinanceLeaseLiabilityCurrent]
+  cash_and_securities:
+    period: instant
+    combine: max
+    components:
+      - name: cash
+        required: true
+        any_of:
+          - [CashAndCashEquivalentsAtCarryingValue]
+          - [CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents]
+          - [Cash]
+      # Not required: a company with no investments reports no tag. Set required: true to be strict.
+      - name: short_term_investments
+        required: false
+        any_of:
+          - [ShortTermInvestments]
+          - [MarketableSecuritiesCurrent]
+          - [AvailableForSaleSecuritiesDebtSecuritiesCurrent]
+          - [DebtSecuritiesCurrent]
+          - [DebtSecuritiesAvailableForSaleExcludingAccruedInterestCurrent]
+          - [AvailableForSaleSecuritiesDebtSecurities]
+      - name: long_term_investments
+        required: false
+        any_of:
+          - [MarketableSecuritiesNoncurrent]
+          - [AvailableForSaleSecuritiesDebtSecuritiesNoncurrent]
+          - [LongTermInvestments]
+          - [DebtSecuritiesNoncurrent]
+          - [DebtSecuritiesAvailableForSaleExcludingAccruedInterestNoncurrent]
+  total_assets:
+    period: instant
+    combine: first
+    components:
+      - name: total_assets
+        required: true
+        any_of:
+          - [Assets]
+  # Lending to customers, used by business.financing_receivables. Absent tags mean no finding.
+  financing_receivables:
+    period: instant
+    combine: max
+    components:
+      - name: financing_receivables
+        required: true
+        any_of:
+          - [NotesAndLoansReceivableNetCurrent, NotesAndLoansReceivableNetNoncurrent]
+          - [NotesReceivableNet]
+          - [FinancingReceivableExcludingAccruedInterestAfterAllowanceForCreditLoss]
+          - [FinancingReceivableExcludingAccruedInterestAfterAllowanceForCreditLossCurrent, FinancingReceivableExcludingAccruedInterestAfterAllowanceForCreditLossNoncurrent]
+          - [LoansAndLeasesReceivableNetReportedAmount]
+          - [NetInvestmentInLease]
+          - [SalesTypeAndDirectFinancingLeasesLeaseReceivable]
+  total_liabilities:
+    period: instant
+    combine: first
+    components:
+      - name: total_liabilities
+        required: true
+        any_of:
+          - [Liabilities]
+  revenue:
+    period: ttm
+    combine: first
+    components:
+      - name: revenue
+        required: true
+        any_of:
+          - [Revenues]
+          - [RevenueFromContractWithCustomerExcludingAssessedTax]
+          - [RevenueFromContractWithCustomerIncludingAssessedTax]
+          - [SalesRevenueNet]
+  # Gross interest income only. Net "other income" lines must never be listed here.
+  # When these tags give no figure, interest_income_sources below is tried, in this order:
+  # trailing 12 months from the filing's own XBRL, the annual fallback, sums over dimensions,
+  # and last net investment income.
+  interest_income:
+    period: ttm
+    combine: max
+    # Used only when no trailing-12-month figure can be built: the latest annual figure, if its
+    # period ended no more than max_age_days before the screen date. Flagged in the audit record.
+    annual_fallback:
+      max_age_days: 450
+    components:
+      - name: interest_income
+        required: true
+        any_of:
+          - [InvestmentIncomeInterest]
+          - [InvestmentIncomeInterestAndDividend]
+          - [InterestAndDividendIncomeOperating]
+          - [InterestIncomeOther]
+          - [InterestIncomeOperating]
+          # Can include dividends and investment gains, which overstates interest (conservative).
+          - [InvestmentIncomeNonoperating]
+  interest_expense:
+    period: ttm
+    combine: max
+    components:
+      - name: interest_expense
+        required: true
+        any_of:
+          - [InterestExpense]
+          - [InterestExpenseNonoperating]
+          - [InterestExpenseDebt]
+          - [InterestPaidNet]
+
+# A spin-off or major disposition reported after the latest balance sheet date makes that
+# balance sheet out of date: a pass becomes insufficient_data until the next 10-Q or 10-K.
+# A current report counts when it carries one of the items and its text matches one of the
+# phrases (regular expressions, case-insensitive).                 project rule
+events:
+  forms: ["8-K", "8-K/A"]
+  kinds:
+    - name: separation
+      items: ["2.01", "8.01"]
+      phrases:
+        # Past tense only: "upon completion of the separation" is how a plan is described.
+        - "completed (the|its) (previously announced )?(separation|spin-?off|spin off)"
+    - name: disposition
+      items: ["2.01"]            # item 2.01 is only filed for a significant acquisition or disposal
+      phrases:
+        - "completed (the|its) (previously announced )?(sale|divestiture|disposition)"
+
+interest_income_sources:       # project rules, not from the standard
+  # The filing's own XBRL has what companyfacts drops: company-specific tags and facts reported
+  # with a dimension.
+  filing_xbrl:
+    # Company-specific tag names accepted as gross interest income, whatever the company prefix.
+    extension_tags: [InterestIncome, InterestIncomeNonoperating, InterestIncomeOnCashAndCashEquivalents]
+    # A fact reported with dimensions counts only if every one of its axes is listed here; its
+    # members are then summed. Legal-entity, parent-only and related-party breakdowns are left
+    # out on purpose: they are parts of the company, not the whole.
+    sum_axes:
+      - "us-gaap:StatementBusinessSegmentsAxis"
+      - "srt:ConsolidationItemsAxis"
+      - "srt:ProductOrServiceAxis"
+      - "us-gaap:InvestmentTypeAxis"
+      - "us-gaap:IncomeStatementLocationAxis"
+    # A single member is one slice of the company (often "corporate"), never a total.
+    min_members: 2
+    # A sum over members may miss part of the total, so it supports a pass only when the
+    # impure income ratio is below this share of the limit. Otherwise insufficient_data.
+    max_share_of_limit: 0.50
+  # Investment income net of investment expenses. Recorded as basis "net_investment_income".
+  # It supports a pass only below this share of the impure income limit; otherwise
+  # insufficient_data. Net "other income" lines must never be listed here.
+  net_investment_income:
+    tags: [InvestmentIncomeNet]
+    max_share_of_limit: 0.50
+  # When no interest income is disclosed at all, it is bounded from above at
+  # (cash + interest-bearing securities) x yield_ceiling. If that bound passes the impure
+  # income screen the basis is recorded as "upper_bound_no_disclosure"; otherwise
+  # insufficient_data. When the investment tags are absent too (investments assumed zero) the
+  # cash figure cannot be trusted as complete, so total assets x yield_ceiling is used instead.
+  upper_bound:
+    yield_ceiling: 0.05
+
+# Business screen. A rule matches on GICS sub-industry name or SIC code (single code or
+# "low-high" range). Any matching fail rule fails; otherwise any matching needs_review rule
+# sends the stock to review. Nothing here auto-passes a borderline case.            VERIFY
+business:
+  required_classifications: [sic, gics_sub_industry]   # missing one means insufficient_data
+  # A company that would otherwise pass the business screen goes to needs_review when its
+  # financing receivables are above this share of total assets (a lending arm).   project rule
+  financing_receivables:
+    max_share_of_assets: 0.05
+  rules:
+    - category: alcohol
+      action: fail
+      gics_sub_industries: ["Brewers", "Distillers & Vintners"]
+      sic: ["2082", "2084", "2085", "5180-5182", "5813", "5921"]
+    - category: tobacco
+      action: fail
+      gics_sub_industries: ["Tobacco"]
+      sic: ["2100-2199", "5194"]
+    - category: gambling
+      action: fail
+      gics_sub_industries: ["Casinos & Gaming"]
+      sic: ["7993"]
+    - category: conventional_banking
+      action: fail
+      gics_sub_industries: ["Diversified Banks", "Regional Banks", "Consumer Finance", "Commercial & Residential Mortgage Finance"]
+      sic: ["6020-6036", "6141", "6162"]
+    - category: conventional_insurance
+      action: fail
+      gics_sub_industries: ["Life & Health Insurance", "Property & Casualty Insurance", "Multi-line Insurance", "Reinsurance"]
+      sic: ["6311", "6321", "6331", "6351", "6361", "6399"]
+    - category: weapons
+      action: fail
+      gics_sub_industries: []
+      sic: ["3480-3489", "3795"]
+
+    - category: weapons
+      action: needs_review
+      gics_sub_industries: ["Aerospace & Defense"]
+      sic: ["3720-3728", "3760-3769", "3812"]
+    - category: alcohol
+      action: needs_review
+      gics_sub_industries: ["Restaurants", "Food Retail", "Consumer Staples Merchandise Retail", "Food Distributors", "Drug Retail", "Hotels, Resorts & Cruise Lines", "Passenger Airlines"]
+      sic: ["2080", "4400-4499", "4512", "5140-5149", "5300-5399", "5400-5499", "5810-5812", "5912", "7011"]
+    - category: pork
+      action: needs_review
+      gics_sub_industries: ["Packaged Foods & Meats", "Agricultural Products & Services"]
+      sic: ["0200-0299", "2011", "2013", "2015"]
+    - category: gambling
+      action: needs_review
+      gics_sub_industries: ["Leisure Facilities"]
+      sic: ["7990", "7999"]
+    - category: adult_entertainment
+      action: needs_review
+      gics_sub_industries: ["Movies & Entertainment", "Broadcasting", "Cable & Satellite", "Interactive Home Entertainment", "Interactive Media & Services", "Publishing", "Advertising"]
+      sic: ["2711", "2721", "4833", "4841", "7810-7829", "7841"]
+    - category: conventional_finance
+      action: needs_review
+      gics_sub_industries: ["Asset Management & Custody Banks", "Investment Banking & Brokerage", "Financial Exchanges & Data", "Transaction & Payment Processing Services", "Multi-Sector Holdings", "Diversified Financial Services", "Specialized Finance", "Mortgage REITs"]
+      sic: ["6000-6019", "6037-6140", "6142-6161", "6163-6299", "6770"]
+    # Manufacturers with a lending arm whose interest income is reported as revenue.
+    - category: captive_finance
+      action: needs_review
+      gics_sub_industries: ["Automobile Manufacturers", "Motorcycle Manufacturers", "Agricultural & Farm Machinery", "Construction Machinery & Heavy Transportation Equipment"]
+      sic: []
+    - category: conventional_insurance
+      action: needs_review
+      gics_sub_industries: ["Insurance Brokers", "Managed Health Care"]
+      sic: ["6324", "6411"]
+
+constituents:
+  url: "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+  user_agent: "halal-heatmap/0.1 (S&P 500 constituent reader)"
+  table_id: constituents
+  min_count: 490
+  max_count: 520
+
+edgar:
+  # The User-Agent is read from the SEC_USER_AGENT environment variable, never from here.
+  max_requests_per_second: 8      # SEC allows at most 10
+  timeout_seconds: 30
+  max_retries: 4
+  backoff_seconds: 1.5
+  cache_dir: .cache/edgar
+  cache_ttl_hours: 12

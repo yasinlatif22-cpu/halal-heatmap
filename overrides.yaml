@@ -1,0 +1,17 @@
+# Manual review decisions. An override can only resolve a needs_review status.
+# Every entry needs: ticker, decision (pass | fail), reason, reviewer, date (YYYY-MM-DD).
+# Optional: additional_impure_income (USD, trailing 12 months) added to the impure income numerator.
+# Entries expire after overrides.expiry_days in config.yaml.
+#
+# - ticker: XYZ
+#   decision: pass
+#   reason: "Alcohol is under 1% of revenue per the FY2025 10-K segment note."
+#   reviewer: "YL"
+#   date: 2026-10-04
+#   additional_impure_income: 12000000
+overrides:
+  - ticker: TSLA
+    decision: pass
+    reason: "financing assets 0.16% of total assets; interest income 1.68% of revenue"
+    reviewer: "maintainer"
+    date: 2026-10-05
