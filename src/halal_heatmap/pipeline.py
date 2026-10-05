@@ -17,6 +17,7 @@ from halal_heatmap.facts import (
     merge_company_facts,
     resolve_input,
     share_counts,
+    with_instance_facts,
 )
 from halal_heatmap.filings import (
     FilingEntry,
@@ -44,6 +45,7 @@ from halal_heatmap.sources.prices import PriceHistory, PriceSource
 from halal_heatmap.sources.wikipedia import Constituent
 
 PRICE_LEAD_DAYS = 7
+YEAR_MATCH_DAYS = 20  # a period this close to one year earlier is the same point in the company's calendar
 
 
 class FilingSource(Protocol):
@@ -63,6 +65,37 @@ def _load_instances(
         except SourceError as exc:
             notes["filing_xbrl"] = str(exc)
     return loaded
+
+
+def _newer_and_due(
+    filing_list: list[FilingEntry], anchor_end: date | None, as_of: date, cfg: Config
+) -> tuple[tuple[str, date, date] | None, date | None]:
+    """A newer periodic report listed by EDGAR than the balance sheet in use, and otherwise the date the
+    next report is due. Both follow this company's own calendar and filing lags, not a flat age.
+
+    Any periodic report for a later period than the balance sheet in use has no usable balance sheet,
+    because the screen would have used it. For the next report the company's own calendar is read from a
+    year earlier: the period that followed the same point last year, shifted forward a year, is the
+    expected period. It is due once the company's longest observed filing lag and the grace have passed.
+    A company with no such history falls back to one default cadence after the balance sheet."""
+    periodic = [f for f in filing_list if f.period is not None]
+    if anchor_end is not None:
+        later = [f for f in periodic if f.period > anchor_end]
+        if later:
+            newest = max(later, key=lambda f: (f.period, f.filed))
+            return (newest.accession, newest.period, newest.filed), None
+    if anchor_end is None:
+        return None, None
+    periods = sorted({f.period for f in periodic})
+    lags = [(f.filed - f.period).days for f in periodic]
+    lag = max(lags) if lags else cfg.filings.default_cadence_days
+    same_point = [p for p in periods if abs((p - (anchor_end - timedelta(days=365))).days) <= YEAR_MATCH_DAYS]
+    successors = [p for p in periods if same_point and p > max(same_point)]
+    if same_point and successors:
+        expected = min(successors) + timedelta(days=365)
+    else:
+        expected = anchor_end + timedelta(days=cfg.filings.default_cadence_days)
+    return None, expected + timedelta(days=lag + cfg.filings.overdue_grace_days)
 
 
 def _successor_note(submissions: dict, cik: int, as_of: date, floor: date, cfg: Config) -> str | None:
@@ -188,6 +221,15 @@ def gather_inputs(
     try:
         raw = merge_company_facts([filings.company_facts(cik) for cik in ciks])
         cf = CompanyFacts(raw, forms=cfg.filings.forms, as_of=as_of)
+        # A periodic filing EDGAR lists but companyfacts does not serve yet is read from its own XBRL
+        # instance, as the project does when companyfacts falls short. Without this the screen would
+        # silently use the balance sheet before it.
+        recent_floor = as_of - timedelta(days=cfg.filings.instance_lookback_days)
+        unserved = [f for f in filing_list if f.filed >= recent_floor and f.accession not in cf.accessions()]
+        loaded = _load_instances(filings, unserved, notes) if unserved else []
+        if loaded:
+            raw = with_instance_facts(raw, loaded)
+            cf = CompanyFacts(raw, forms=cfg.filings.forms, as_of=as_of)
     except SourceError as exc:
         cf = None
         notes["filing"] = str(exc)
@@ -238,6 +280,18 @@ def gather_inputs(
                 resolved = resolve_input(cf, spec, anchor.end, cfg.periods)
                 values[name] = resolved.value
                 used.extend(resolved.used)
+                if resolved.left_out:
+                    holders = ", ".join(resolved.left_out)
+                    notes[f"{name}_overlap"] = f"left out, a reported total or balance-sheet line holds it: {holders}"
+                if resolved.kept:
+                    notes[f"{name}_kept"] = "kept, though a total it sits in is smaller than it: " + ", ".join(
+                        resolved.kept
+                    )
+                if any(u.component == "long_term_investments" for u in resolved.used):
+                    notes[f"{name}_long_term_investments"] = (
+                        "long-term investments may include equity investments, which are not interest-bearing; "
+                        "counted as reported"
+                    )
                 if resolved.value is None:
                     if name != "financing_receivables":  # most companies have none; absence is not a gap
                         notes[name] = "no usable tag for: " + ", ".join(resolved.missing)
@@ -302,8 +356,15 @@ def gather_inputs(
         reason = notes.get("prices") or notes.get("shares") or notes.get("filing") or "not available"
         market_caps = {name: MarketCap(None, note=reason) for name in ("spot", *cfg.market_cap.window_months)}
 
+    newer, due = _newer_and_due(filing_list, filing.period_end if filing else None, as_of, cfg)
+    if newer is not None:
+        notes["newer_filing"] = (
+            f"listed by EDGAR but no usable balance sheet: {newer[0]} (period {newer[1]}, filed {newer[2]})"
+        )
     inputs = ScreenInputs(
         ticker=constituent.ticker,
+        newer_unusable=newer,
+        balance_sheet_due=due,
         cik=constituent.cik,
         screen_date=as_of,
         sic=sic,

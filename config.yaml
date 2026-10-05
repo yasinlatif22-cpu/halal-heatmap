@@ -51,7 +51,20 @@ debt_plausibility:             # project rule, not from the standard
 filings:
   forms: ["10-K", "10-Q", "10-K/A", "10-Q/A"]
   balance_sheet_anchor: [Assets]
-  max_period_age_days: 200    # older latest balance sheet means insufficient_data
+  # A newer 10-Q or 10-K that EDGAR lists but that has no usable balance sheet makes the company
+  # insufficient_data. An older balance sheet may stand in only if it is no older than this many days
+  # at the screen date. 0 means never. Project rule.
+  max_fallback_age_days: 0
+  # A balance sheet goes stale relative to the company's own filing cadence, not a flat age: once the
+  # period after the latest balance sheet is due (cadence + this grace), with no newer report listed,
+  # the company is insufficient_data. Project rule.
+  overdue_grace_days: 45
+  # A 10-Q or 10-K listed by EDGAR within this many days, that companyfacts does not serve yet, is read
+  # from its own XBRL instance. Project rule.
+  instance_lookback_days: 400
+  # The next report is due after the company's own calendar, its longest filing lag and this grace. With
+  # no history of the same point a year earlier, the default cadence applies. Project rule.
+  default_cadence_days: 91
   annual_forms: ["10-K", "10-K/A"]
   # A registrant that files one of these took over from an earlier registrant. If it has no
   # entry under predecessors below, the audit record says so.
@@ -125,6 +138,18 @@ inputs:
   debt:
     period: instant
     combine: max
+    # A tag inside a total reported with it is left out, so it is not counted twice. Checked against
+    # the filings: NVDA's LongTermDebt (33,366) includes its 1,000 DebtCurrent; UPS's
+    # DebtAndCapitalLeaseObligations (24,484) includes its 634 current portion and 1,190 finance
+    # leases; MAR's noncurrent LongTermDebtAndCapitalLeaseObligations (16,455) includes its 1,242
+    # commercial paper and 110 finance leases, while its 460 current portion is outside it and stays.
+    within:
+      - inside: [LongTermDebt, DebtAndCapitalLeaseObligations]   # including current maturities
+        contains: [DebtCurrent]
+      - inside: [DebtAndCapitalLeaseObligations, LongTermDebtAndCapitalLeaseObligations]   # incl. capital leases
+        contains: [FinanceLeaseLiability, FinanceLeaseLiabilityNoncurrent, FinanceLeaseLiabilityCurrent]
+      - inside: [LongTermDebtAndCapitalLeaseObligations]        # noncurrent debt, incl. commercial paper
+        contains: [CommercialPaperNoncurrent]
     components:
       - name: long_term_debt
         required: false
@@ -153,6 +178,14 @@ inputs:
   cash_and_securities:
     period: instant
     combine: max
+    # The broad available-for-sale debt total includes cash equivalents, which the cash line already holds
+    # (NVDA: 46,900 total, 34,143 marketable debt, so 12,757 excess, within its 22,443 cash line; MSFT:
+    # 71,084 total, 55,908 short-term investments, 15,176 excess, within its 20,935 cash). The total is
+    # dropped only when that excess fits inside the cash line. A larger excess keeps the total.
+    prefer:
+      - use: [DebtSecuritiesCurrent, ShortTermInvestments]
+        over: [AvailableForSaleSecuritiesDebtSecurities]
+        covered_by: [CashAndCashEquivalentsAtCarryingValue]
     components:
       - name: cash
         required: true

@@ -4,7 +4,7 @@ companyfacts shape (plain and summed over dimensions), and per-class share count
 from __future__ import annotations
 
 import itertools
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 from halal_heatmap.config import Events, ShareClasses, TagRef
@@ -23,6 +23,7 @@ class FilingEntry:
     filed: date
     primary_document: str
     items: tuple[str, ...] = ()  # 8-K item numbers
+    period: date | None = field(default=None, compare=False)  # the period the report covers
 
 
 def list_filings(submissions: dict, cik: int, forms: tuple[str, ...], as_of: date) -> list[FilingEntry]:
@@ -34,10 +35,11 @@ def list_filings(submissions: dict, cik: int, forms: tuple[str, ...], as_of: dat
         recent.get("filingDate") or [],
         recent.get("primaryDocument") or [],
         recent.get("items") or itertools.repeat(""),
+        recent.get("reportDate") or itertools.repeat(""),
         strict=False,
     )
     out = []
-    for accession, form, filed, document, items in rows:
+    for accession, form, filed, document, items, report in rows:
         if form not in forms:
             continue
         try:
@@ -46,7 +48,11 @@ def list_filings(submissions: dict, cik: int, forms: tuple[str, ...], as_of: dat
             continue
         if day <= as_of:
             listed = tuple(item.strip() for item in str(items or "").split(",") if item.strip())
-            out.append(FilingEntry(cik, accession, form, day, document or "", listed))
+            try:
+                period = date.fromisoformat(report) if report else None
+            except (TypeError, ValueError):
+                period = None
+            out.append(FilingEntry(cik, accession, form, day, document or "", listed, period))
     return sorted(out, key=lambda f: (f.filed, f.accession), reverse=True)
 
 

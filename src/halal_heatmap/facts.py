@@ -6,6 +6,7 @@ that was not public at the time.
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -48,6 +49,8 @@ class ResolvedInput:
     used: tuple[UsedFact, ...]
     absent_optional: tuple[str, ...] = ()  # optional components with no tag, counted as 0
     annual_fallback: Fact | None = None  # set when an annual figure stood in for trailing 12 months
+    left_out: tuple[str, ...] = ()  # tags reported but not summed, because a total already holds them
+    kept: tuple[str, ...] = ()  # contained tags kept, because their container is smaller than they are
 
 
 @dataclass(frozen=True)
@@ -125,6 +128,31 @@ def merge_company_facts(docs: list[dict]) -> dict:
     return merged
 
 
+def with_instance_facts(raw: dict, loaded: list) -> dict:
+    """companyfacts plus the undimensioned facts of filings it does not serve yet. `loaded` holds
+    (filing, instance facts) pairs, where a filing has `form`, `accession` and `filed`. Facts are added
+    in companyfacts shape, so the anchor search and every other reader treat them the same way."""
+    merged = copy.deepcopy(raw)
+    for filing, facts in loaded:
+        for fact in facts:
+            if fact.get("dims") or fact.get("unit") is None:
+                continue
+            taxonomy, _, name = str(fact["tag"]).rpartition(":")
+            item = {
+                "end": fact["end"],
+                "val": fact["val"],
+                "filed": filing.filed.isoformat(),
+                "form": filing.form,
+                "accn": filing.accession,
+            }
+            if fact.get("start"):
+                item["start"] = fact["start"]
+            tags = merged.setdefault("facts", {}).setdefault(taxonomy or "us-gaap", {})
+            target = tags.setdefault(name, {"units": {}})
+            target["units"].setdefault(fact["unit"], []).append(item)
+    return merged
+
+
 def _latest_filed(facts: list[Fact]) -> Fact:
     return max(facts, key=lambda f: (f.filed, f.accession))
 
@@ -196,6 +224,49 @@ def ttm_value(parts: list[tuple[str, Fact]]) -> float:
     return sum(-f.value if role == "prior_ytd" else f.value for role, f in parts)
 
 
+def _value_at(cf: CompanyFacts, tag: TagRef, end: date, spec: InputSpec, periods: Periods) -> float | None:
+    if spec.period == "instant":
+        fact = instant_fact(cf, tag, end)
+        return fact.value if fact else None
+    parts = ttm_facts(cf, tag, end, periods)
+    return ttm_value(parts) if parts else None
+
+
+def _reported_at(cf: CompanyFacts, tag: TagRef, end: date, spec: InputSpec, periods: Periods) -> bool:
+    return _value_at(cf, tag, end, spec, periods) is not None
+
+
+def _overlaps(cf: CompanyFacts, spec: InputSpec, end: date, periods: Periods) -> tuple[set, set]:
+    """Tags left out of the sum, and contained tags kept because their container is smaller.
+
+    A contained tag is left out only when its container is at least as large at the same period.
+    When the container is smaller, the contained tag cannot be part of it, so both are kept and the
+    kept tag is noted. A preferred line removes the broader total it is reported with."""
+    excluded: set[TagRef] = set()
+    kept: set[TagRef] = set()
+    for rule in spec.within:
+        tops = [v for v in (_value_at(cf, tag, end, spec, periods) for tag in rule.inside) if v is not None]
+        if not tops:
+            continue
+        top = max(tops)
+        for tag in rule.contains:
+            value = _value_at(cf, tag, end, spec, periods)
+            if value is None:
+                continue
+            if value <= top:
+                excluded.add(tag)
+            else:
+                kept.add(tag)
+    kept -= excluded
+    for rule in spec.prefer:
+        line = [v for v in (_value_at(cf, tag, end, spec, periods) for tag in rule.use) if v is not None]
+        total = [v for v in (_value_at(cf, tag, end, spec, periods) for tag in rule.over) if v is not None]
+        cover = [v for v in (_value_at(cf, tag, end, spec, periods) for tag in rule.covered_by) if v is not None]
+        if line and total and cover and max(total) - max(line) <= max(cover):
+            excluded.update(rule.over)
+    return excluded, kept
+
+
 def resolve_input(cf: CompanyFacts, spec: InputSpec, end: date, periods: Periods) -> ResolvedInput:
     total = 0.0
     found = False
@@ -203,11 +274,17 @@ def resolve_input(cf: CompanyFacts, spec: InputSpec, end: date, periods: Periods
     absent_optional: list[str] = []
     fallback: Fact | None = None
     used: list[UsedFact] = []
+    # Tags a reported total already holds are left out, so a figure is never counted twice.
+    contained, kept_tags = _overlaps(cf, spec, end, periods)
+    left_out = tuple(sorted(str(t) for t in contained if _reported_at(cf, t, end, spec, periods)))
+    kept = tuple(sorted(str(t) for t in kept_tags if _reported_at(cf, t, end, spec, periods)))
     for comp in spec.components:
         candidates: list[list[tuple[float, list[tuple[str, Fact]]]]] = []
         for alternative in comp.any_of:
             reported = []
             for tag in alternative:
+                if tag in contained:
+                    continue
                 if spec.period == "instant":
                     fact = instant_fact(cf, tag, end)
                     if fact:
@@ -223,7 +300,9 @@ def resolve_input(cf: CompanyFacts, spec: InputSpec, end: date, periods: Periods
         if not candidates and spec.annual_fallback_max_age_days is not None:
             for alternative in comp.any_of:
                 annual = [
-                    latest_annual_fact(cf, tag, end, periods, spec.annual_fallback_max_age_days)
+                    None
+                    if tag in contained
+                    else latest_annual_fact(cf, tag, end, periods, spec.annual_fallback_max_age_days)
                     for tag in alternative
                 ]
                 reported = [(f.value, [("annual_fallback", f)]) for f in annual if f is not None]
@@ -248,8 +327,8 @@ def resolve_input(cf: CompanyFacts, spec: InputSpec, end: date, periods: Periods
     if not found and not missing:
         missing = [comp.name for comp in spec.components]
     if missing:
-        return ResolvedInput(spec.name, None, tuple(missing), ())
-    return ResolvedInput(spec.name, total, (), tuple(used), tuple(absent_optional), fallback)
+        return ResolvedInput(spec.name, None, tuple(missing), (), left_out=left_out, kept=kept)
+    return ResolvedInput(spec.name, total, (), tuple(used), tuple(absent_optional), fallback, left_out, kept)
 
 
 def has_recent_facts(cf: CompanyFacts, spec: InputSpec, end: date, lookback_days: int) -> bool:

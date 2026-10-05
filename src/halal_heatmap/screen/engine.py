@@ -87,6 +87,9 @@ class ScreenInputs:
     latest_filing_accessions: tuple[str, ...] | None = None  # every accession of that date; None when unknown
     source_failed: bool = False  # a fetch of filings, facts or prices failed, so the screen should be retried
     notes: Mapping[str, str] = field(default_factory=dict)  # why an input is missing
+    # A newer 10-Q or 10-K that EDGAR lists but that gave no usable balance sheet: (accession, period, filed).
+    newer_unusable: tuple[str, date, date] | None = None
+    balance_sheet_due: date | None = None  # the next periodic report was due by this date and is not listed
 
 
 @dataclass(frozen=True)
@@ -237,8 +240,18 @@ def _missing_inputs(
         missing.append("no balance sheet filing found")
     else:
         age = (inputs.screen_date - inputs.filing.period_end).days
-        if age > cfg.filings.max_period_age_days:
-            missing.append(f"latest filing is stale (period end {inputs.filing.period_end}, {age} days old)")
+        if inputs.newer_unusable is not None:
+            accession, period, filed = inputs.newer_unusable
+            if age > cfg.filings.max_fallback_age_days:
+                missing.append(
+                    f"latest filing {accession} (period {period}, filed {filed}) has no usable balance sheet, "
+                    f"and the balance sheet for {inputs.filing.period_end} is {age} days old"
+                )
+        elif inputs.balance_sheet_due is not None and inputs.screen_date > inputs.balance_sheet_due:
+            missing.append(
+                f"no periodic filing listed after period {inputs.filing.period_end}; it was due by "
+                f"{inputs.balance_sheet_due} for this company's filing cadence"
+            )
     if debt.value is None:
         missing.append(f"debt ({debt.note or inputs.notes.get('debt', 'not reported')})")
     for name, value in (("cash_and_securities", inputs.cash_and_securities), ("revenue", inputs.revenue)):

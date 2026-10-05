@@ -103,7 +103,10 @@ class DebtPlausibility:
 class Filings:
     forms: tuple[str, ...]
     balance_sheet_anchor: tuple[TagRef, ...]
-    max_period_age_days: int
+    overdue_grace_days: int  # a report is overdue this long after the period it expects is due
+    max_fallback_age_days: int  # an older balance sheet may stand in for a newer one this recent
+    instance_lookback_days: int  # a listed filing this recent that companyfacts lacks is read from its XBRL
+    default_cadence_days: int  # next report expected one cadence after a balance sheet, without history
     annual_forms: tuple[str, ...]
     successor_forms: tuple[str, ...]
     companyfacts_lag_days: int
@@ -192,12 +195,35 @@ class Component:
 
 
 @dataclass(frozen=True)
+class Within:
+    """A tag that is part of a total reported with it. When any `inside` tag is reported at the
+    period, the `contains` tags are left out of the sum, so nothing is counted twice."""
+
+    inside: tuple[TagRef, ...]
+    contains: tuple[TagRef, ...]
+
+
+@dataclass(frozen=True)
+class Prefer:
+    """A balance-sheet line that is narrower than a broader total reported with it. When the `use`
+    line is reported and the `over` total exceeds it by no more than the `covered_by` line, the
+    `over` tags are not summed: the excess is inside `covered_by`, which the cash line already holds.
+    Without a covering line, or with a larger excess, both stay summed, as before."""
+
+    use: tuple[TagRef, ...]
+    over: tuple[TagRef, ...]
+    covered_by: tuple[TagRef, ...]  # the `over` total is dropped only if its excess is at most this line
+
+
+@dataclass(frozen=True)
 class InputSpec:
     name: str
     period: str
     combine: str
     components: tuple[Component, ...]
     annual_fallback_max_age_days: int | None = None
+    within: tuple[Within, ...] = ()
+    prefer: tuple[Prefer, ...] = ()
 
     def optional_components(self) -> tuple[str, ...]:
         return tuple(comp.name for comp in self.components if not comp.required)
@@ -266,6 +292,7 @@ def _req(node: Any, path: str, key: str) -> Any:
     if not isinstance(node, dict) or key not in node or node[key] is None:
         raise ConfigError(f"config: missing required key '{path}.{key}'".replace("'.", "'"))
     return node[key]
+
 
 
 def _number(node: Any, path: str, key: str, *, positive: bool = True) -> float:
@@ -337,8 +364,35 @@ def _inputs(raw: dict) -> dict[str, InputSpec]:
             _choice(spec, path, "combine", COMBINE_MODES),
             tuple(components),
             _annual_fallback(spec, path),
+            _within(spec, path),
+            _prefer(spec, path),
         )
     return out
+
+
+def _prefer(spec: dict, path: str) -> tuple[Prefer, ...]:
+    rules = []
+    for index, rule in enumerate(spec.get("prefer") or []):
+        where = f"{path}.prefer[{index}]"
+        use = tuple(TagRef.parse(t) for t in _req(rule, where, "use") or ())
+        over = tuple(TagRef.parse(t) for t in _req(rule, where, "over") or ())
+        covered_by = tuple(TagRef.parse(t) for t in _req(rule, where, "covered_by") or ())
+        if not use or not over or not covered_by:
+            raise ConfigError(f"config: '{where}' needs 'use', 'over' and 'covered_by' tags")
+        rules.append(Prefer(use, over, covered_by))
+    return tuple(rules)
+
+
+def _within(spec: dict, path: str) -> tuple[Within, ...]:
+    rules = []
+    for index, rule in enumerate(spec.get("within") or []):
+        where = f"{path}.within[{index}]"
+        inside = tuple(TagRef.parse(t) for t in _req(rule, where, "inside") or ())
+        contains = tuple(TagRef.parse(t) for t in _req(rule, where, "contains") or ())
+        if not inside or not contains:
+            raise ConfigError(f"config: '{where}' needs both 'inside' and 'contains' tags")
+        rules.append(Within(inside, contains))
+    return tuple(rules)
 
 
 def _annual_fallback(spec: dict, path: str) -> int | None:
@@ -501,7 +555,10 @@ def parse_config(raw: Any) -> Config:
         filings=Filings(
             forms=tuple(_req(filings, "filings", "forms")),
             balance_sheet_anchor=tuple(TagRef.parse(t) for t in _req(filings, "filings", "balance_sheet_anchor")),
-            max_period_age_days=int(_number(filings, "filings", "max_period_age_days")),
+            overdue_grace_days=int(_number(filings, "filings", "overdue_grace_days")),
+            max_fallback_age_days=int(_number(filings, "filings", "max_fallback_age_days", positive=False)),
+            instance_lookback_days=int(_number(filings, "filings", "instance_lookback_days")),
+            default_cadence_days=int(_number(filings, "filings", "default_cadence_days")),
             annual_forms=tuple(_req(filings, "filings", "annual_forms")),
             successor_forms=tuple(filings.get("successor_forms") or ()),
             companyfacts_lag_days=int(_number(filings, "filings", "companyfacts_lag_days")),

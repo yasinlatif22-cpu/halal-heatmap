@@ -68,11 +68,13 @@ def test_any_missing_required_input_is_insufficient_data(cfg, changes, fragment)
     assert fragment in result.reason
 
 
-def test_stale_filing_is_insufficient_data(cfg):
+def test_an_old_balance_sheet_is_fine_until_the_next_report_is_overdue(cfg):
+    """Staleness follows the company's own cadence, not a flat age: a 200+ day old balance sheet passes
+    while its next periodic report is not yet due."""
     old = dataclasses.replace(make_inputs().filing, period_end=SCREEN_DATE - timedelta(days=201))
-    assert screen(make_inputs(filing=old), cfg).status == "insufficient_data"
-    fresh = dataclasses.replace(old, period_end=SCREEN_DATE - timedelta(days=200))
-    assert screen(make_inputs(filing=fresh), cfg).status == "pass"
+    assert screen(make_inputs(filing=old, balance_sheet_due=SCREEN_DATE), cfg).status == "pass"
+    result = screen(make_inputs(filing=old, balance_sheet_due=SCREEN_DATE - timedelta(days=1)), cfg)
+    assert result.status == "insufficient_data" and "no periodic filing listed" in result.reason
 
 
 def test_missing_debt_treated_as_zero_only_when_corroborated(cfg):
