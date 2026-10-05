@@ -83,6 +83,9 @@ class ScreenInputs:
     share_count_jump: bool = False  # a large change between consecutive counts, for review
     share_count_note: str = ""
     post_balance_sheet_event: str = ""  # spin-off or major disposition reported after the balance sheet date
+    latest_filing_date: date | None = None  # newest watched filing this screen read
+    latest_filing_accessions: tuple[str, ...] | None = None  # every accession of that date; None when unknown
+    source_failed: bool = False  # a fetch of filings, facts or prices failed, so the screen should be retried
     notes: Mapping[str, str] = field(default_factory=dict)  # why an input is missing
 
 
@@ -483,6 +486,11 @@ def result_to_record(result: ScreenResult, cfg: Config) -> dict:
         "share_counts_rejected": inputs.share_counts_rejected,
         "share_count_jump": int(inputs.share_count_jump),
         "share_count_note": inputs.share_count_note,
+        "latest_filing_date": inputs.latest_filing_date.isoformat() if inputs.latest_filing_date else None,
+        "latest_filing_accessions": (
+            None if inputs.latest_filing_accessions is None else json.dumps(list(inputs.latest_filing_accessions))
+        ),
+        "source_failed": int(inputs.source_failed),
         "interest_income_yield_ceiling": (
             None
             if result.interest_upper_bound is None

@@ -66,6 +66,19 @@ class CompanyFacts:
         self._forms = set(forms)
         self.as_of = as_of
         self._cache: dict[tuple[TagRef, str], list[Fact]] = {}
+        self._accessions: frozenset[str] | None = None
+
+    def accessions(self) -> frozenset[str]:
+        """Every filing the document holds a fact from, whatever its form or date."""
+        if self._accessions is None:
+            self._accessions = frozenset(
+                item.get("accn")
+                for tags in self._facts.values()
+                for body in tags.values()
+                for items in (body.get("units") or {}).values()
+                for item in items
+            )
+        return self._accessions
 
     def facts(self, tag: TagRef, unit: str = MONEY_UNIT) -> list[Fact]:
         key = (tag, unit)

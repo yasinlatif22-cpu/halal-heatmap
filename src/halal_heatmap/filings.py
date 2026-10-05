@@ -50,6 +50,30 @@ def list_filings(submissions: dict, cik: int, forms: tuple[str, ...], as_of: dat
     return sorted(out, key=lambda f: (f.filed, f.accession), reverse=True)
 
 
+def watched_filings(
+    periodic: list[FilingEntry], reports: list[FilingEntry], event_items: frozenset[str]
+) -> list[FilingEntry]:
+    """Filings whose arrival means the company is screened again: periodic reports, and current
+    reports carrying an item the events rule reads."""
+    return [*periodic, *(r for r in reports if event_items & set(r.items))]
+
+
+def filing_watermark(watched: list[FilingEntry]) -> tuple[date | None, tuple[str, ...]]:
+    """The latest filing date among the watched filings and every accession filed that day.
+    EDGAR dates filings by day, so the accessions tell a later filing of the same day apart."""
+    if not watched:
+        return None, ()
+    latest = max(f.filed for f in watched)
+    return latest, tuple(sorted({f.accession for f in watched if f.filed == latest}))
+
+
+def newer_filings(
+    watched: list[FilingEntry], mark: date | None, accessions: tuple[str, ...] | list[str]
+) -> list[FilingEntry]:
+    """Watched filings a screen with the given watermark has not read."""
+    return [f for f in watched if mark is None or f.filed > mark or (f.filed == mark and f.accession not in accessions)]
+
+
 def income_filings(
     filings: list[FilingEntry], anchor_accession: str, annual_forms: tuple[str, ...]
 ) -> list[FilingEntry]:

@@ -1,5 +1,9 @@
 # Every screening parameter lives in this file. Nothing in src/ hardcodes a threshold.
 # Items marked VERIFY are the ones to check against the current AAOIFI standard.
+#
+# Every result stores a hash of this file as its methodology version. The hash leaves out the
+# settings that only decide when and how data is fetched: edgar, schedule, constituents and
+# filings.companyfacts_lag_days. Changing anything else re-screens every company.
 
 screens:
   # ratio passes when: ratio <operator> threshold. Operators: "<" or "<=".
@@ -51,6 +55,10 @@ filings:
   # A registrant that files one of these took over from an earlier registrant. If it has no
   # entry under predecessors below, the audit record says so.
   successor_forms: ["8-K12B", "8-K12G3"]
+  # EDGAR lists a new filing before its figures reach companyfacts. A periodic filing this
+  # recent that companyfacts does not hold yet is noted and not counted as read, so the
+  # company is screened again until its figures arrive.              project rule
+  companyfacts_lag_days: 3
 
 # Successor CIK -> CIKs the same company filed under before a holding-company reorganisation.
 # Their filings are read as part of the successor's history.
@@ -66,6 +74,12 @@ periods:                      # how duration facts are recognised when building 
 
 overrides:
   expiry_days: 365
+
+# Every constituent is screened again on this day of each month, or on the first run after it.
+# Between those dates a company is screened again only when something about it changes: a new
+# periodic filing, a current report carrying an events item, an override, or this file.
+schedule:                     # project rule, not from the standard
+  monthly_day: 1
 
 shares:
   recent_days: 200            # a share tag is used only if it was filed this recently

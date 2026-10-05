@@ -23,9 +23,11 @@ from halal_heatmap.filings import (
     class_share_counts,
     event_reported,
     extension_tags,
+    filing_watermark,
     income_filings,
     instance_documents,
     list_filings,
+    watched_filings,
 )
 from halal_heatmap.interest import COMPANYFACTS, FILING_XBRL, FilingViews, InterestIncome, resolve_interest_income
 from halal_heatmap.marketcap import (
@@ -38,7 +40,7 @@ from halal_heatmap.marketcap import (
 from halal_heatmap.overrides import Override
 from halal_heatmap.screen.engine import FilingRef, ScreenInputs, ScreenResult, screen
 from halal_heatmap.sources import SourceError
-from halal_heatmap.sources.prices import PriceSource
+from halal_heatmap.sources.prices import PriceHistory, PriceSource
 from halal_heatmap.sources.wikipedia import Constituent
 
 PRICE_LEAD_DAYS = 7
@@ -97,6 +99,36 @@ def _event_after(
     return ""
 
 
+def company_filings(
+    filings: FilingSource, constituent: Constituent, as_of: date, cfg: Config
+) -> tuple[list[FilingEntry], list[FilingEntry], dict | None, dict[str, str]]:
+    """What EDGAR lists for a company at the screen date: periodic filings (its predecessors'
+    included), current reports, its own submissions document, and why any of it is missing."""
+    notes: dict[str, str] = {}
+    periodic: list[FilingEntry] = []
+    reports: list[FilingEntry] = []
+    own = None
+    for cik in (constituent.cik, *cfg.predecessors.get(constituent.cik, ())):
+        try:
+            submissions = filings.submissions(cik)
+        except SourceError as exc:
+            notes["sic" if cik == constituent.cik else "predecessor"] = str(exc)
+            continue
+        periodic.extend(list_filings(submissions, cik, cfg.filings.forms, as_of))
+        if cik == constituent.cik:
+            own = submissions
+            reports = list_filings(submissions, cik, cfg.events.forms, as_of)
+    periodic.sort(key=lambda f: (f.filed, f.accession), reverse=True)
+    return periodic, reports, own, notes
+
+
+def _completed(history: PriceHistory, as_of: date) -> PriceHistory:
+    """Only closes dated before the screen date, whatever the source returned. The screen date's
+    own price may be an unfinished trading day, and would differ from one run to the next. Splits
+    are kept whole: the closes are adjusted for all of them, so the share counts must be too."""
+    return PriceHistory([(day, close) for day, close in history.closes if day < as_of], history.splits)
+
+
 def _class_summary(counts: list[ShareCount], history: dict, as_of: date) -> tuple[str, float | None]:
     """The latest per-class counts as JSON, and the share of their value priced at another class."""
     current = [c for c in counts if c.effective <= as_of]
@@ -138,28 +170,20 @@ def gather_inputs(
     share_source = COMPANYFACTS
     share_classes = ""
     unlisted_class_share = None
-    filing_list: list[FilingEntry] = []
-    reports: list[FilingEntry] = []
     event = ""
     share_check = None
     ciks = [constituent.cik, *cfg.predecessors.get(constituent.cik, ())]
     window_start = add_months(as_of, -max(cfg.market_cap.window_months.values()))
     history_floor = window_start - timedelta(days=cfg.shares.recent_days)
 
-    for cik in ciks:
-        try:
-            submissions = filings.submissions(cik)
-        except SourceError as exc:
-            notes["sic" if cik == constituent.cik else "predecessor"] = str(exc)
-            continue
-        filing_list.extend(list_filings(submissions, cik, cfg.filings.forms, as_of))
-        if cik == constituent.cik:
-            reports = list_filings(submissions, cik, cfg.events.forms, as_of)
-            sic = str(submissions.get("sic") or "").strip() or None
-            successor = _successor_note(submissions, cik, as_of, history_floor, cfg)
-            if successor:
-                notes["predecessor"] = successor
-    filing_list.sort(key=lambda f: (f.filed, f.accession), reverse=True)
+    filing_list, reports, submissions, missing = company_filings(filings, constituent, as_of, cfg)
+    notes.update(missing)
+    source_failed = bool(missing)
+    if submissions is not None:
+        sic = str(submissions.get("sic") or "").strip() or None
+        successor = _successor_note(submissions, constituent.cik, as_of, history_floor, cfg)
+        if successor:
+            notes["predecessor"] = successor
 
     try:
         raw = merge_company_facts([filings.company_facts(cik) for cik in ciks])
@@ -167,6 +191,17 @@ def gather_inputs(
     except SourceError as exc:
         cf = None
         notes["filing"] = str(exc)
+        source_failed = True
+
+    # A filing EDGAR lists but companyfacts does not hold yet has not been read by this screen.
+    lag_floor = as_of - timedelta(days=cfg.filings.companyfacts_lag_days)
+    lagging = [f for f in filing_list if f.filed >= lag_floor and (cf is None or f.accession not in cf.accessions())]
+    if lagging and cf is not None:
+        notes["filing_lag"] = "listed by EDGAR but not yet in companyfacts: " + ", ".join(
+            f"{f.form} {f.accession} filed {f.filed}" for f in lagging
+        )
+    watched = [f for f in watched_filings(filing_list, reports, cfg.events.items()) if f not in lagging]
+    latest_filing_date, latest_filing_accessions = filing_watermark(watched)
 
     if cf is not None:
         anchor = find_anchor(cf, cfg.filings.balance_sheet_anchor)
@@ -237,7 +272,10 @@ def gather_inputs(
     if counts:
         start = window_start - timedelta(days=PRICE_LEAD_DAYS)
         try:
-            history = {symbol: prices.history(symbol, start, as_of) for symbol in sorted({c.symbol for c in counts})}
+            history = {
+                symbol: _completed(prices.history(symbol, start, as_of), as_of)
+                for symbol in sorted({c.symbol for c in counts})
+            }
             # Only counts that can reach a market cap window matter: the last one before the windows and later.
             earlier = [c.effective for c in counts if c.effective < history_floor]
             counts = [c for c in counts if not earlier or c.effective >= max(earlier)]
@@ -259,6 +297,7 @@ def gather_inputs(
                 used.append(UsedFact("shares_outstanding", str(share_tag.tag), "latest", current[-1].fact))
         except SourceError as exc:
             notes["prices"] = str(exc)
+            source_failed = source_failed or share_check is None  # no check yet means the price fetch failed
     if not market_caps:
         reason = notes.get("prices") or notes.get("shares") or notes.get("filing") or "not available"
         market_caps = {name: MarketCap(None, note=reason) for name in ("spot", *cfg.market_cap.window_months)}
@@ -295,6 +334,9 @@ def gather_inputs(
         share_count_jump=bool(share_check and share_check.jump),
         share_count_note=share_check.note if share_check else "",
         post_balance_sheet_event=event,
+        latest_filing_date=latest_filing_date,
+        latest_filing_accessions=latest_filing_accessions if submissions is not None else None,
+        source_failed=source_failed,
         unlisted_class_share=unlisted_class_share,
         notes=notes,
     )

@@ -11,15 +11,12 @@ from datetime import date
 from halal_heatmap.config import DENOMINATORS, RATIOS, ConfigError, load_config
 from halal_heatmap.facts import UsedFact
 from halal_heatmap.overrides import load_overrides
-from halal_heatmap.pipeline import screen_constituent
-from halal_heatmap.screen.engine import result_to_record
+from halal_heatmap.runner import ForwardOnlyError, run_screen, supersede_run, update
 from halal_heatmap.sources import SourceError
 from halal_heatmap.sources.edgar import EdgarClient
 from halal_heatmap.sources.prices import YFinancePrices
 from halal_heatmap.sources.wikipedia import fetch_constituents
 from halal_heatmap.store import Store
-
-SOURCE_NOTES = ("filing", "prices", "sic", "filing_xbrl", "predecessor", "events")
 
 
 def _money(value) -> str:
@@ -142,76 +139,153 @@ def format_record(record: dict, used: list[UsedFact]) -> str:
     return "\n".join(lines)
 
 
+def _progress(args, total: int):
+    """Print each result as it is screened, in the form the flags ask for."""
+    position = 0
+    of = f"/{total}" if total else ""
+
+    def show(ticker, result, record, used, outcome) -> None:
+        nonlocal position
+        position += 1
+        if result is None:
+            print(f"[{position}{of}] {ticker} ERROR {outcome}", file=sys.stderr)
+        elif args.quiet:
+            print(f"[{position}{of}] {ticker} {result.status} ({outcome})", file=sys.stderr)
+        elif not args.json:
+            print(format_record(record, used if args.facts else []))
+            print()
+        if record is not None:
+            show.records.append(record)
+
+    show.records = []
+    return show
+
+
+def format_change(change) -> str:
+    lines = [
+        f"{change['screen_date']}  {change['ticker']}  {change['old_status']} -> {change['new_status']}"
+        f"  cause: {change['cause']} ({change['cause_detail']})",
+        f"    was ({change['previous_screen_date']}): {change['old_reason']}",
+        f"    now: {change['new_reason']}",
+    ]
+    for crossing in json.loads(change["crossings"]):
+        before, after = crossing["before"], crossing["after"]
+        lines.append(
+            f"    {crossing['ratio']} / {after['denominator']} {crossing['direction']} its limit: "
+            f"{_pct(before['ratio'])} (limit {before['operator']} {_pct(before['threshold'])}) -> "
+            f"{_pct(after['ratio'])} (limit {after['operator']} {_pct(after['threshold'])})"
+        )
+    others = [f for f in json.loads(change["factors"]) if f["cause"] != change["cause"]]
+    if others:
+        lines.append("    also changed: " + "; ".join(f"{f['cause']} ({f['detail']})" for f in others))
+    return "\n".join(lines)
+
+
+def _report(args, summary, records: list[dict]) -> None:
+    if getattr(args, "json", False):
+        print(json.dumps(records, indent=2))
+        return
+    for event in summary.index_events:
+        print(f"index: {event['ticker']} {event['kind']} ({event['name']})")
+    for change in summary.changes:
+        print(format_change(change))
+    print("summary: " + (", ".join(f"{status} {n}" for status, n in sorted(summary.counts.items())) or "nothing due"))
+    if summary.run_id is not None:
+        print(f"run {summary.run_id}: {summary.saved} stored, {summary.unchanged} unchanged for {summary.as_of}")
+    elif summary.unchanged:
+        print(f"no new rows: {summary.unchanged} already stored for {summary.as_of}")
+
+
 def _screen(args) -> int:
     cfg = load_config(args.config)
     overrides = load_overrides(args.overrides)
     as_of = date.fromisoformat(args.date) if args.date else date.today()
     edgar = EdgarClient(cfg.edgar)
-    prices = YFinancePrices()
-    constituents = {c.ticker: c for c in fetch_constituents(cfg.constituents)}
-
-    per_cik = Counter(c.cik for c in constituents.values())
-    wanted = [t.upper() for t in args.tickers] or sorted(constituents)
-    unknown = [t for t in wanted if t not in constituents]
+    constituents = fetch_constituents(cfg.constituents)
+    known = {c.ticker for c in constituents}
+    wanted = [t.upper() for t in args.tickers]
+    unknown = [t for t in wanted if t not in known]
     if unknown:
         print(f"not in the S&P 500 constituent list: {', '.join(unknown)}", file=sys.stderr)
         return 2
 
     store = None if args.no_store else Store(args.db)
-    run_id = store.start_run(as_of.isoformat(), cfg.hash) if store else None
-    if store:
-        store.save_constituents(as_of.isoformat(), list(constituents.values()))
-    counts: Counter = Counter()
-    errors: list[str] = []
-    records = []
-    for position, ticker in enumerate(wanted, 1):
-        try:
-            result, used = screen_constituent(
-                constituents[ticker],
-                as_of,
-                cfg,
-                edgar,
-                prices,
-                overrides.get(ticker),
-                trigger=args.trigger,
-                prefer_class_shares=per_cik[constituents[ticker].cik] > 1,
-            )
-        except Exception as exc:  # one bad ticker must not stop a full run; it gets no verdict
-            counts["error"] += 1
-            errors.append(f"{ticker}: unexpected {type(exc).__name__}: {exc}")
-            print(f"[{position}/{len(wanted)}] {ticker} ERROR {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
-        if args.quiet:
-            print(f"[{position}/{len(wanted)}] {ticker} {result.status}", file=sys.stderr)
-        record = result_to_record(result, cfg)
-        counts[record["status"]] += 1
-        errors.extend(f"{ticker}: {k}: {v}" for k, v in result.inputs.notes.items() if k in SOURCE_NOTES)
+    show = _progress(args, len(wanted or known))
+    try:
+        summary = run_screen(
+            as_of,
+            cfg,
+            constituents,
+            edgar,
+            YFinancePrices(),
+            overrides,
+            store,
+            tickers=wanted or None,
+            trigger=args.trigger,
+            on_result=show,
+        )
+    except ForwardOnlyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    finally:
         if store:
-            store.save_result(run_id, record, used)
-        records.append(record)
-        if not args.json and not args.quiet:
-            print(format_record(record, used if args.facts else []))
-            print()
-    if store:
-        store.finish_run(run_id, dict(counts), errors)
+            store.close()
+    _report(args, summary, show.records)
+    return 0
+
+
+def _update(args) -> int:
+    cfg = load_config(args.config)
+    overrides = load_overrides(args.overrides)
+    as_of = date.fromisoformat(args.date) if args.date else date.today()
+    edgar = EdgarClient(cfg.edgar)
+    constituents = fetch_constituents(cfg.constituents)
+    store = Store(args.db)
+    args.quiet, args.json, args.facts = True, False, False
+    show = _progress(args, 0)
+    try:
+        summary = update(as_of, cfg, constituents, edgar, YFinancePrices(), overrides, store, on_result=show)
+    except ForwardOnlyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    finally:
         store.close()
-    if args.json:
-        print(json.dumps(records, indent=2))
-    else:
-        print("summary: " + ", ".join(f"{status} {n}" for status, n in sorted(counts.items())))
+    for reason, count in sorted(Counter(summary.due.values()).items()):
+        print(f"due: {count} ({reason})")
+    for error in summary.errors:
+        print(f"source: {error}", file=sys.stderr)
+    _report(args, summary, [])
+    return 0
+
+
+def _changes(args) -> int:
+    store = Store(args.db)
+    try:
+        rows = store.status_changes(args.ticker.upper() if args.ticker else None, args.since)
+        events = [] if args.ticker else store.index_events()
+        events = [e for e in events if not args.since or e["event_date"] >= args.since]
+    finally:
+        store.close()
+    for event in events:
+        print(f"{event['event_date']}  index: {event['ticker']} {event['kind']} ({event['name']})")
+    for row in rows:
+        print(format_change(row))
+    print(f"{len(rows)} status changes, {len(events)} index events")
     return 0
 
 
 def _supersede(args) -> int:
     store = Store(args.db)
     try:
-        store.supersede_run(args.run_id, args.reason)
+        changes = supersede_run(store, args.run_id, args.reason)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     finally:
         store.close()
     print(f"run {args.run_id} marked as superseded")
+    for change in changes:
+        print("measured again: " + format_change(change))
     return 0
 
 
@@ -230,6 +304,17 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--quiet", action="store_true", help="progress lines only, no audit records")
     run.add_argument("--json", action="store_true", help="print audit records as JSON")
     run.set_defaults(func=_screen)
+    upd = sub.add_parser("update", help="screen what is due: everything monthly, otherwise what has changed")
+    upd.add_argument("--date", help="screen date, YYYY-MM-DD (default: today)")
+    upd.add_argument("--config", default="config.yaml")
+    upd.add_argument("--overrides", default="overrides.yaml")
+    upd.add_argument("--db", default="data/screens.db")
+    upd.set_defaults(func=_update)
+    changes = sub.add_parser("changes", help="list stored status changes and index events")
+    changes.add_argument("ticker", nargs="?")
+    changes.add_argument("--since", help="only from this screen date, YYYY-MM-DD")
+    changes.add_argument("--db", default="data/screens.db")
+    changes.set_defaults(func=_changes)
     supersede = sub.add_parser("supersede-run", help="mark a stored run as invalid so nothing uses it")
     supersede.add_argument("run_id", type=int)
     supersede.add_argument("--reason", required=True)

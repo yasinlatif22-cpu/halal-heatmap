@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from halal_heatmap.config import ConfigError, load_config, parse_config
+from halal_heatmap.config import ConfigError, load_config, methodology, parse_config
 from halal_heatmap.overrides import parse_overrides
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +50,8 @@ def test_repo_config_loads_with_decided_defaults():
         ("events", "kinds"),
         ("business", "rules"),
         ("edgar", "max_requests_per_second"),
+        ("schedule", "monthly_day"),
+        ("filings", "companyfacts_lag_days"),
     ],
 )
 def test_missing_key_is_an_error(raw, path):
@@ -73,6 +75,89 @@ def test_bad_operator_and_driving_are_rejected(raw):
 
 def test_hash_changes_with_a_threshold(raw, cfg):
     raw["screens"]["debt"]["threshold"] = 0.33
+    assert parse_config(raw).hash != cfg.hash
+
+
+IN_HASH = {  # a change here can change a verdict
+    "screens",
+    "market_cap",
+    "near_threshold",
+    "zero_debt",
+    "debt_plausibility",
+    "filings",
+    "predecessors",
+    "periods",
+    "overrides",
+    "shares",
+    "inputs",
+    "events",
+    "interest_income_sources",
+    "business",
+}
+NOT_IN_HASH = {"edgar", "schedule", "constituents"}  # and filings.companyfacts_lag_days
+
+
+def test_every_config_section_is_classified_for_the_hash(raw):
+    """A new top-level section fails here until someone decides whether it is methodology."""
+    assert set(raw) == IN_HASH | NOT_IN_HASH
+    kept = methodology(raw)
+    assert set(kept) == IN_HASH
+    assert "companyfacts_lag_days" not in kept["filings"] and set(kept["filings"]) == set(raw["filings"]) - {
+        "companyfacts_lag_days"
+    }
+    assert "companyfacts_lag_days" in raw["filings"]  # the config itself is not altered
+
+
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (("edgar", "cache_ttl_hours"), 1),
+        (("edgar", "max_requests_per_second"), 4),
+        (("edgar", "cache_dir"), "elsewhere"),
+        (("schedule", "monthly_day"), 15),
+        (("filings", "companyfacts_lag_days"), 7),
+        (("constituents", "min_count"), 480),
+        (("constituents", "user_agent"), "someone else"),
+    ],
+)
+def test_operational_settings_do_not_change_the_hash(raw, cfg, path, value):
+    section, key = path
+    assert raw[section][key] != value
+    raw[section][key] = value
+    assert parse_config(raw).hash == cfg.hash
+
+
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (("screens", "cash", "threshold"), 0.25),
+        (("screens", "impure_income", "operator"), "<="),
+        (("market_cap", "driving"), "spot"),
+        (("market_cap", "window_months", "avg_12m"), 6),
+        (("market_cap", "spot_divergence_factor"), 2),
+        (("near_threshold", "margin"), 0.2),
+        (("zero_debt", "max_interest_expense_to_revenue"), 0.002),
+        (("debt_plausibility", "max_interest_expense_to_debt"), 0.3),
+        (("filings", "max_period_age_days"), 120),
+        (("periods", "tolerance_days"), 5),
+        (("overrides", "expiry_days"), 180),
+        (("shares", "sanity", "reject_multiple"), 10),
+        (("shares", "classes", "unlisted"), "exclude"),
+        (("inputs", "debt", "components", 0, "any_of", 0), ["DebtInstrumentFaceAmount"]),
+        (("inputs", "interest_income", "annual_fallback", "max_age_days"), 400),
+        (("events", "kinds", 0, "items"), ["2.01"]),
+        (("interest_income_sources", "upper_bound", "yield_ceiling"), 0.04),
+        (("business", "financing_receivables", "max_share_of_assets"), 0.1),
+        (("business", "rules", 0, "sic"), ["2082"]),
+        (("predecessors", 2115436), [1]),
+    ],
+)
+def test_methodology_settings_change_the_hash(raw, cfg, path, value):
+    node = raw
+    for key in path[:-1]:
+        node = node[key]
+    assert node[path[-1]] != value
+    node[path[-1]] = value
     assert parse_config(raw).hash != cfg.hash
 
 
@@ -159,3 +244,11 @@ def test_share_sanity_and_event_settings_are_validated(raw):
 def test_spot_divergence_is_measured_against_the_twelve_month_average(cfg):
     assert (cfg.market_cap.spot_divergence_against, cfg.market_cap.spot_divergence_factor) == ("avg_12m", 1.5)
     assert (cfg.shares.sanity.reject_multiple, cfg.shares.sanity.flag_multiple) == (5, 1.5)
+
+
+@pytest.mark.parametrize("day", [0, 32, 1.5])
+def test_monthly_day_must_be_a_day_of_the_month(raw, cfg, day):
+    assert cfg.monthly_day == 1
+    raw["schedule"]["monthly_day"] = day
+    with pytest.raises(ConfigError, match="monthly_day"):
+        parse_config(raw)

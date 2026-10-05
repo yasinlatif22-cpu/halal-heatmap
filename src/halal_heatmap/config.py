@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import operator
@@ -34,6 +35,12 @@ NEAR_MODES = ("relative", "absolute")
 SPLIT_BASES = ("end", "filed")
 UNLISTED_CLASS_MODES = ("price_at_listed", "exclude")
 DEFAULT_TAXONOMY = "us-gaap"
+MAX_MONTH_DAY = 31
+HASH_LENGTH = 12
+# Settings that decide when and how data is fetched, never what a verdict is. They are left out
+# of the config hash. Anything not listed here is hashed, so a new key counts as methodology
+# until it is deliberately added.
+OPERATIONAL_KEYS = ("edgar", "schedule", "constituents", "filings.companyfacts_lag_days")
 
 
 class ConfigError(ValueError):
@@ -98,6 +105,7 @@ class Filings:
     max_period_age_days: int
     annual_forms: tuple[str, ...]
     successor_forms: tuple[str, ...]
+    companyfacts_lag_days: int
 
 
 @dataclass(frozen=True)
@@ -241,6 +249,7 @@ class Config:
     filings: Filings
     periods: Periods
     override_expiry_days: int
+    monthly_day: int
     shares: Shares
     events: Events
     interest_income_sources: InterestIncomeSources
@@ -435,6 +444,30 @@ def _business(raw: dict) -> Business:
     )
 
 
+def _monthly_day(raw: dict) -> int:
+    day = _number(_req(raw, "", "schedule"), "schedule", "monthly_day")
+    if day != int(day) or not 1 <= day <= MAX_MONTH_DAY:
+        raise ConfigError(f"config: 'schedule.monthly_day' must be a day of the month, got {day!r}")
+    return int(day)
+
+
+def methodology(raw: dict) -> dict:
+    """The part of the config a verdict depends on: everything but OPERATIONAL_KEYS."""
+    kept = copy.deepcopy(raw)
+    for path in OPERATIONAL_KEYS:
+        *parents, key = path.split(".")
+        node = kept
+        for parent in parents:
+            node = node.get(parent) if isinstance(node, dict) else None
+        if isinstance(node, dict):
+            node.pop(key, None)
+    return kept
+
+
+def config_hash(raw: dict) -> str:
+    return hashlib.sha256(json.dumps(methodology(raw), sort_keys=True, default=str).encode()).hexdigest()[:HASH_LENGTH]
+
+
 def parse_config(raw: Any) -> Config:
     if not isinstance(raw, dict):
         raise ConfigError("config: top level must be a mapping")
@@ -451,7 +484,6 @@ def parse_config(raw: Any) -> Config:
     )
     if not share_tags:
         raise ConfigError("config: 'shares.tags' is empty")
-    digest = hashlib.sha256(json.dumps(raw, sort_keys=True, default=str).encode()).hexdigest()
     return Config(
         thresholds=_thresholds(raw),
         market_cap=_market_cap(raw),
@@ -471,6 +503,7 @@ def parse_config(raw: Any) -> Config:
             max_period_age_days=int(_number(filings, "filings", "max_period_age_days")),
             annual_forms=tuple(_req(filings, "filings", "annual_forms")),
             successor_forms=tuple(filings.get("successor_forms") or ()),
+            companyfacts_lag_days=int(_number(filings, "filings", "companyfacts_lag_days")),
         ),
         periods=Periods(
             int(_number(periods, "periods", "annual_min_days")),
@@ -478,6 +511,7 @@ def parse_config(raw: Any) -> Config:
             int(_number(periods, "periods", "tolerance_days")),
         ),
         override_expiry_days=int(_number(_req(raw, "", "overrides"), "overrides", "expiry_days")),
+        monthly_day=_monthly_day(raw),
         shares=Shares(
             int(_number(shares, "shares", "recent_days")), share_tags, _share_classes(shares), _share_sanity(shares)
         ),
@@ -501,7 +535,7 @@ def parse_config(raw: Any) -> Config:
             cache_dir=_req(edgar, "edgar", "cache_dir"),
             cache_ttl_hours=_number(edgar, "edgar", "cache_ttl_hours"),
         ),
-        hash=digest[:12],
+        hash=config_hash(raw),
     )
 
 
