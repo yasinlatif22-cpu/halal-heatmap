@@ -37,10 +37,11 @@ UNLISTED_CLASS_MODES = ("price_at_listed", "exclude")
 DEFAULT_TAXONOMY = "us-gaap"
 MAX_MONTH_DAY = 31
 HASH_LENGTH = 12
-# Settings that decide when and how data is fetched, never what a verdict is. They are left out
-# of the config hash. Anything not listed here is hashed, so a new key counts as methodology
-# until it is deliberately added.
-OPERATIONAL_KEYS = ("edgar", "schedule", "constituents", "filings.companyfacts_lag_days")
+# Settings that never decide a verdict: when and how data is fetched, and the near-threshold
+# margin, which only sets a flag on a passing ratio. They are left out of the config hash.
+# Anything not listed here is hashed, so a new key counts as methodology until it is
+# deliberately added.
+OPERATIONAL_KEYS = ("edgar", "schedule", "constituents", "near_threshold", "filings.companyfacts_lag_days")
 
 
 class ConfigError(ValueError):

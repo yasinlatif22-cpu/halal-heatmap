@@ -162,8 +162,10 @@ History and change detection (`runner.py`, `changes.py`)
 - The config hash is the methodology version. It covers everything in `config.yaml` that can
   change a verdict (thresholds and operators, market cap settings, tag lists, business rules,
   override expiry, events, filing and period rules, predecessors) and leaves out `edgar`,
-  `schedule`, `constituents` and `filings.companyfacts_lag_days`. A new key is hashed unless it
-  is added to `OPERATIONAL_KEYS` in `config.py`; a test fails until a new section is classified.
+  `schedule`, `constituents`, `filings.companyfacts_lag_days` and `near_threshold`, which only
+  sets a flag. A changed margin re-screens nothing: each flag is refreshed the next time its
+  company is screened. A new key is hashed unless it is added to `OPERATIONAL_KEYS` in
+  `config.py`; a test fails until a new section is classified.
 - Cause, first that applies: `methodology_change` (config hash), a data source failing or
   recovering (`other`), `override_added` / `override_expired` / `override_removed`, `event_8k`,
   `new_filing` (reported figures changed), `price_move` (a market cap ratio crossed, a market cap

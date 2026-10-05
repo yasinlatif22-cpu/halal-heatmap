@@ -81,7 +81,6 @@ def test_hash_changes_with_a_threshold(raw, cfg):
 IN_HASH = {  # a change here can change a verdict
     "screens",
     "market_cap",
-    "near_threshold",
     "zero_debt",
     "debt_plausibility",
     "filings",
@@ -94,7 +93,7 @@ IN_HASH = {  # a change here can change a verdict
     "interest_income_sources",
     "business",
 }
-NOT_IN_HASH = {"edgar", "schedule", "constituents"}  # and filings.companyfacts_lag_days
+NOT_IN_HASH = {"edgar", "schedule", "constituents", "near_threshold"}  # and filings.companyfacts_lag_days
 
 
 def test_every_config_section_is_classified_for_the_hash(raw):
@@ -118,6 +117,8 @@ def test_every_config_section_is_classified_for_the_hash(raw):
         (("filings", "companyfacts_lag_days"), 7),
         (("constituents", "min_count"), 480),
         (("constituents", "user_agent"), "someone else"),
+        (("near_threshold", "margin"), 0.2),
+        (("near_threshold", "mode"), "absolute"),
     ],
 )
 def test_operational_settings_do_not_change_the_hash(raw, cfg, path, value):
@@ -135,7 +136,6 @@ def test_operational_settings_do_not_change_the_hash(raw, cfg, path, value):
         (("market_cap", "driving"), "spot"),
         (("market_cap", "window_months", "avg_12m"), 6),
         (("market_cap", "spot_divergence_factor"), 2),
-        (("near_threshold", "margin"), 0.2),
         (("zero_debt", "max_interest_expense_to_revenue"), 0.002),
         (("debt_plausibility", "max_interest_expense_to_debt"), 0.3),
         (("filings", "max_period_age_days"), 120),

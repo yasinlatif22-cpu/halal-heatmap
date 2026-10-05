@@ -164,6 +164,28 @@ def test_headroom_and_near_threshold_are_recorded(cfg):
     assert (record["debt_threshold"], record["debt_operator"]) == (0.30, "<")
 
 
+@pytest.mark.parametrize(
+    "inputs",
+    [
+        dict(debt=280.0, interest_income=10.0),  # pass, near the debt limit
+        dict(debt=320.0),  # fail
+        dict(debt=280.0, **REVIEW),  # needs_review
+        dict(debt=280.0, revenue=None),  # insufficient_data
+        dict(debt=280.0, **BANK),  # business fail
+    ],
+)
+def test_near_threshold_settings_only_move_the_flags(raw, cfg, inputs):
+    """Why near_threshold is left out of the config hash: no margin changes a status."""
+    flags = ("near_threshold", "debt_near", "cash_near", "impure_income_near")
+    base = result_to_record(screen(make_inputs(**inputs), cfg), cfg)
+    for mode, margin in (("relative", 0.001), ("relative", 0.99), ("absolute", 0.001), ("absolute", 0.29)):
+        raw["near_threshold"] = {"mode": mode, "margin": margin}
+        other = parse_config(raw)
+        assert other.hash == cfg.hash
+        record = result_to_record(screen(make_inputs(**inputs), other), other)
+        assert {k: v for k, v in record.items() if k not in flags} == {k: v for k, v in base.items() if k not in flags}
+
+
 def test_active_override_resolves_needs_review(cfg):
     passed = screen(make_inputs(**REVIEW, override=override("pass")), cfg)
     assert passed.status == "pass" and "manual override by YL" in passed.reason

@@ -2,8 +2,9 @@
 # Items marked VERIFY are the ones to check against the current AAOIFI standard.
 #
 # Every result stores a hash of this file as its methodology version. The hash leaves out the
-# settings that only decide when and how data is fetched: edgar, schedule, constituents and
-# filings.companyfacts_lag_days. Changing anything else re-screens every company.
+# settings that cannot change a verdict: edgar, schedule, constituents and
+# filings.companyfacts_lag_days (when and how data is fetched) and near_threshold (a flag only).
+# Changing anything else re-screens every company.
 
 screens:
   # ratio passes when: ratio <operator> threshold. Operators: "<" or "<=".
