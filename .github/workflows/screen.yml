@@ -1,0 +1,134 @@
+name: screen and publish
+
+# Runs `update`, which screens whatever is due: every constituent on the monthly date, otherwise only
+# companies with a new filing, a new 8-K event, a changed config or a fetch to retry. The results are
+# published only if the publish gates pass (src/halal_heatmap/gates.py). A failed gate fails this job
+# and nothing from that run reaches the site or the data branch.
+#
+# The database lives on the orphan `data` branch as screens.db.gz. It is saved only when a run stores
+# rows, after the export has succeeded. The concurrency group below means two runs never overlap, so
+# two runs can never write the data branch at once.
+
+on:
+  schedule:
+    # Weekdays at 21:30 UTC, after the 16:00 New York close in both time zones.
+    - cron: "30 21 * * 1-5"
+    # Extra midday runs in the earnings seasons (Jan, Feb, Apr, May, Jul, Aug, Oct, Nov).
+    - cron: "30 13 * 1,2,4,5,7,8,10,11 1-5"
+  workflow_dispatch:
+    inputs:
+      accept_status_changes:
+        description: "Publish although the status-change gate failed, after reviewing the changes"
+        type: boolean
+        default: false
+      start_new_database:
+        description: "First run only: create the data branch and start a new database. Refused when the branch exists."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: halal-heatmap-publish
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write  # pushes the database to the data branch, only after the gates and export pass
+    outputs:
+      stored: ${{ steps.gates.outputs.stored }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.10"
+      - name: Install
+        run: python -m pip install .
+
+      - name: Restore the database from the data branch
+        env:
+          START_NEW: ${{ inputs.start_new_database }}
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            if [ "$START_NEW" = "true" ]; then
+              echo "error: the data branch already exists; refusing to start a new database over it" >&2
+              exit 1
+            fi
+            git fetch --depth=1 origin data
+            git show FETCH_HEAD:screens.db.gz | gunzip > data/screens.db
+            echo "restored $(git rev-parse --short FETCH_HEAD) from the data branch"
+          elif [ "$START_NEW" = "true" ]; then
+            echo "no data branch: this run starts a new database"
+          else
+            echo "error: no data branch yet; run once with start_new_database to create it" >&2
+            exit 1
+          fi
+
+      - name: Screen what is due
+        env:
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+        run: halal-heatmap update --summary-json "$RUNNER_TEMP/run.json"
+
+      - name: Check the publish gates
+        id: gates
+        env:
+          ACCEPT_STATUS_CHANGES: ${{ inputs.accept_status_changes }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ "$ACCEPT_STATUS_CHANGES" = "true" ]; then args+=(--accept-status-changes); fi
+          halal-heatmap check-run "$RUNNER_TEMP/run.json" "${args[@]}"
+          echo "stored=$(jq -r '.stored' "$RUNNER_TEMP/run.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Export the site data
+        if: steps.gates.outputs.stored == 'true'
+        run: halal-heatmap export
+
+      - name: Save the database to the data branch
+        if: steps.gates.outputs.stored == 'true'
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/data-branch"
+          if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git fetch --depth=1 origin data
+            git worktree add --detach "$dir" FETCH_HEAD
+          else
+            git worktree add --orphan -b data "$dir"
+          fi
+          gzip -c data/screens.db > "$dir/screens.db.gz"
+          cd "$dir"
+          git add screens.db.gz
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "screen run $GITHUB_RUN_ID"
+          git push origin HEAD:refs/heads/data
+
+      - name: Package the site
+        if: steps.gates.outputs.stored == 'true'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: web
+
+  deploy:
+    needs: screen
+    if: needs.screen.outputs.stored == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@f33f41b675f0ab2dc5a6863c9a170fe83af3571e # v4.0.0
