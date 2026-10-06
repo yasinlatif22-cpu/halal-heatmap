@@ -39,6 +39,9 @@ EVENT_FILING = "event_filing"
 OVERRIDE_CHANGE = "override_change"
 # Notes that mean a source could not be read, as opposed to a company not reporting something.
 SOURCE_NOTES = ("filing", "prices", "sic", "filing_xbrl", "predecessor", "events", "filing_lag")
+# A filing EDGAR lists but companyfacts does not serve yet. Expected for a few days after each
+# filing, so it is reported as lagging rather than counted as an error.
+LAG_NOTE = "filing_lag"
 NOT_COMPARED = ("trigger",)  # the same screen is the same screen whatever asked for it
 
 
@@ -55,19 +58,45 @@ class RunSummary:
     unchanged: int = 0  # screens identical to the one already stored for the date
     counts: Counter = field(default_factory=Counter)
     errors: list[str] = field(default_factory=list)
+    lagging: list[str] = field(default_factory=list)  # tickers with a filing not yet in companyfacts
+    source_failures: Counter = field(default_factory=Counter)  # companies with each SOURCE_NOTES entry
     changes: list[dict] = field(default_factory=list)
     index_events: list[dict] = field(default_factory=list)
     due: dict[str, str] = field(default_factory=dict)  # ticker -> why it was screened (update only)
+    constituents: int = 0
+    previous_constituents: int | None = None  # the list before this one, None for the first snapshot
+
+    def facts(self) -> dict:
+        """What the publish gates need, as plain data so the gates can be tested without a run."""
+        return {
+            "as_of": self.as_of.isoformat(),
+            "run_id": self.run_id,
+            "stored": self.run_id is not None,
+            "screened": self.screened,
+            "saved": self.saved,
+            "unchanged": self.unchanged,
+            "constituents": self.constituents,
+            "previous_constituents": self.previous_constituents,
+            "errors": list(self.errors),
+            "lagging": list(self.lagging),
+            "source_failures": dict(self.source_failures),
+            "status_changes": len(self.changes),
+            "index_events": len(self.index_events),
+            "counts": dict(self.counts),
+        }
 
 
-def record_index_events(store: Store, as_of: date, constituents: list[Constituent]) -> list[dict]:
+def record_index_events(
+    store: Store, as_of: date, constituents: list[Constituent]
+) -> tuple[int | None, list[dict]]:
     """Save the constituent list and what joined or left since the list before it. These are
-    events of their own: a company that joins has no status change, only a first status."""
+    events of their own: a company that joins has no status change, only a first status.
+    Returns the size of the list before, and the events."""
     day = as_of.isoformat()
     previous = store.snapshot_before(day)
     store.save_constituents(day, constituents)
     if previous is None:
-        return []
+        return None, []
     previous_date, before = previous
     now = {c.ticker: c for c in constituents}
     events = [(ADDED, c.ticker, c.cik, c.name) for ticker, c in sorted(now.items()) if ticker not in before]
@@ -75,7 +104,7 @@ def record_index_events(store: Store, as_of: date, constituents: list[Constituen
         (REMOVED, ticker, row["cik"], row["name"]) for ticker, row in sorted(before.items()) if ticker not in now
     ]
     store.save_index_events(day, previous_date, events)
-    return [dict(row) for row in store.index_events(day)]
+    return len(before), [dict(row) for row in store.index_events(day)]
 
 
 def _same_screen(previous: Mapping, record: dict) -> bool:
@@ -111,6 +140,7 @@ def run_screen(
     summary = RunSummary(as_of)
     day = as_of.isoformat()
     joined: set[str] = set()
+    summary.constituents = len(constituents)
     if store is not None:
         latest = store.latest_screen_date()
         if latest is not None and day < latest:
@@ -118,7 +148,7 @@ def run_screen(
                 f"screens are stored up to {latest}; history only moves forward, so {day} cannot be stored "
                 "(use --no-store to look at a past date)"
             )
-        summary.index_events = record_index_events(store, as_of, constituents)
+        summary.previous_constituents, summary.index_events = record_index_events(store, as_of, constituents)
         joined = {event["ticker"] for event in summary.index_events if event["kind"] == ADDED}
     scope = scope or (FULL if tickers is None else PARTIAL)
     run_trigger = trigger if isinstance(trigger, str) else next(iter(set(trigger.values())), MANUAL)
@@ -147,7 +177,13 @@ def run_screen(
         record = result_to_record(result, cfg)
         summary.screened += 1
         summary.counts[record["status"]] += 1
-        summary.errors.extend(f"{ticker}: {k}: {v}" for k, v in result.inputs.notes.items() if k in SOURCE_NOTES)
+        notes = result.inputs.notes
+        summary.source_failures.update(key for key in notes if key in SOURCE_NOTES)
+        if LAG_NOTE in notes:
+            summary.lagging.append(ticker)
+        summary.errors.extend(
+            f"{ticker}: {k}: {v}" for k, v in notes.items() if k in SOURCE_NOTES and k != LAG_NOTE
+        )
         outcome = "not stored"
         if store is not None:
             previous = store.latest_result(ticker)

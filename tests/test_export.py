@@ -123,7 +123,7 @@ def test_reviewer_names_and_emails_never_reach_any_exported_file(world, cfg, sto
     assert REVIEWER not in written and "Ada" not in written and "Example" not in written
     assert "ada@example.org" not in written
     assert re.search(EMAIL_PATTERN, written) is None  # override ids contain "@" but no address
-    assert screen_of(site, "OVR")["override"]["reviewer"] == "Reviewer 1"
+    assert screen_of(site, "OVR")["override"]["reviewer"] == "maintainer"
     assert screen_of(site, "OVR")["status"] == "pass"
 
     # The stored record does carry the name, so the scrub is doing real work.
@@ -136,7 +136,7 @@ def test_reviewer_labels_are_neutral_and_stable(world, cfg, store):
         "B": Override("B", "fail", "y", "Second Person", date(2026, 5, 2)),
         "C": Override("C", "pass", "z", "First Person", date(2026, 5, 3)),
     }
-    assert reviewer_labels(overrides) == {"First Person": "Reviewer 1", "Second Person": "Reviewer 2"}
+    assert reviewer_labels(overrides) == {"First Person": "maintainer", "Second Person": "maintainer"}
 
 
 def test_scrubbing_matches_whole_words_only():
@@ -145,7 +145,7 @@ def test_scrubbing_matches_whole_words_only():
         "Reviewer 1 signed off; XYL and YLE are other words"
     )
     assert scrub_text("manual override by Ada Example on 2026-05-20: x", {}) == (
-        "manual override by a reviewer on 2026-05-20: x"
+        "manual override by maintainer on 2026-05-20: x"
     )
 
 

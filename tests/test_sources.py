@@ -205,3 +205,93 @@ def test_constituent_sanity_checks(cfg):
     dup[3] = dup[2]
     with pytest.raises(SourceError, match="duplicate"):
         parse_constituents(wiki_html(dup), cfg.constituents)
+
+
+# --- prices: retry with backoff behind the PriceSource interface -----------------------------
+
+import sys  # noqa: E402
+import types  # noqa: E402
+from datetime import date, datetime  # noqa: E402
+
+from halal_heatmap.sources.prices import YFinancePrices  # noqa: E402
+
+
+class _Frame:
+    def __init__(self, closes):
+        self.empty = not closes
+        self._closes = closes
+
+    def __getitem__(self, column):
+        return self
+
+    def items(self):
+        return iter(self._closes)
+
+
+def _fake_yfinance(monkeypatch, outcomes, calls):
+    """A yfinance stand-in: each history() call takes the next outcome, an exception or a frame."""
+
+    class Ticker:
+        def __init__(self, symbol):
+            self.splits = {}
+
+        def history(self, **kwargs):
+            calls.append(kwargs)
+            outcome = outcomes.pop(0)
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=Ticker))
+
+
+CLOSES = _Frame([(datetime(2026, 8, 3), 101.0), (datetime(2026, 8, 4), 102.5)])
+
+
+def test_a_throttled_fetch_is_retried_with_doubling_backoff(monkeypatch):
+    calls, slept = [], []
+    _fake_yfinance(monkeypatch, [RuntimeError("429"), RuntimeError("429"), CLOSES], calls)
+    prices = YFinancePrices(4, 5, sleep=slept.append)
+    history = prices.history("AAPL", date(2026, 8, 1), date(2026, 8, 4))
+    assert history.closes == [(date(2026, 8, 3), 101.0), (date(2026, 8, 4), 102.5)]
+    assert slept == [5, 10]
+    assert len(calls) == 3
+
+
+def test_an_empty_frame_is_a_failed_attempt_and_is_retried(monkeypatch):
+    calls, slept = [], []
+    _fake_yfinance(monkeypatch, [_Frame([]), CLOSES], calls)
+    YFinancePrices(4, 5, sleep=slept.append).history("AAPL", date(2026, 8, 1), date(2026, 8, 4))
+    assert slept == [5]
+
+
+def test_a_successful_first_fetch_does_not_sleep(monkeypatch):
+    calls, slept = [], []
+    _fake_yfinance(monkeypatch, [CLOSES], calls)
+    YFinancePrices(4, 5, sleep=slept.append).history("AAPL", date(2026, 8, 1), date(2026, 8, 4))
+    assert slept == []
+
+
+def test_giving_up_after_the_last_attempt_is_a_source_error(monkeypatch):
+    calls, slept = [], []
+    _fake_yfinance(monkeypatch, [RuntimeError("a"), RuntimeError("b"), RuntimeError("c")], calls)
+    with pytest.raises(SourceError, match="price fetch failed for AAPL: c"):
+        YFinancePrices(3, 2, sleep=slept.append).history("AAPL", date(2026, 8, 1), date(2026, 8, 4))
+    assert len(calls) == 3
+    assert slept == [2, 4]  # no sleep after the final attempt
+
+
+def test_a_dotted_ticker_is_fetched_under_yfinance_symbol(monkeypatch):
+    seen = []
+
+    class Ticker:
+        def __init__(self, symbol):
+            seen.append(symbol)
+            self.splits = {}
+
+        def history(self, **kwargs):
+            return CLOSES
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=Ticker))
+    YFinancePrices(1, 0).history("BRK.B", date(2026, 8, 1), date(2026, 8, 4))
+    assert seen == ["BRK-B"]

@@ -422,3 +422,25 @@ edgar:
   backoff_seconds: 1.5
   cache_dir: .cache/edgar
   cache_ttl_hours: 12
+
+prices:
+  # yfinance is unofficial and throttles. A failed fetch is retried with doubling backoff.
+  max_attempts: 4
+  backoff_seconds: 5
+
+# Gates a run must pass before its results are published (see gates.py). A failed gate stops the
+# run: nothing is stored for publication and the site is not rebuilt. Project rule.
+publish:
+  # Error notes (source failures, exceptions) as a share of the constituent list.
+  max_error_share: 0.02
+  # Status changes as a share of the constituent list, so a daily run's few changes are not counted
+  # against a handful of companies. Can be accepted by hand, see the workflow's manual inputs.
+  max_status_change_share: 0.05
+  # Companies that left the constituent list since the last snapshot.
+  max_constituent_drop: 5
+  # Companies whose closes could not be read, in the screen or in the daily price change.
+  max_price_failures: 0
+  # Share of the constituent list with a filing EDGAR lists but companyfacts does not serve yet. Above
+  # this, check-run prints a warning. It does not stop the publish, because a batch of recent filings
+  # is normal; a long-lived one points at a companyfacts problem.
+  max_lagging_share: 0.10

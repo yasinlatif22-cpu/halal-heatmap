@@ -576,7 +576,7 @@
       notices.push(`These results were screened under methodology ${meta.config_hash}, but the current config.yaml is ${meta.current_config_hash}. Re-run the screen before relying on them.`);
     }
     if (!meta.daily_change.included) {
-      notices.push('The daily price change is not in this export, so the colour option is off.');
+      notices.push('The daily price change is not in this export.');
     }
     if (meta.counts.screened_before_latest_date) {
       notices.push(`${meta.counts.screened_before_latest_date} stock(s) were last screened before ${meta.screen_date}.`);
@@ -585,9 +585,10 @@
       el.banner.innerHTML = notices.map((n) => `<p>${esc(n)}</p>`).join('');
       el.banner.hidden = false;
     }
+    // No price data in the export: the option is hidden, not offered greyed out.
     if (!meta.daily_change.included || !members.some((s) => s.daily_change)) {
       el.colourChange.disabled = true;
-      el.colourChangeLabel.title = 'Daily price change is not in this export';
+      el.colourChangeLabel.hidden = true;
     }
     const unsized = meta.unsized || [];
     el.unsizedCount.textContent = unsized.length;

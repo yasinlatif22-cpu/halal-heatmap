@@ -41,7 +41,15 @@ HASH_LENGTH = 12
 # margin, which only sets a flag on a passing ratio. They are left out of the config hash.
 # Anything not listed here is hashed, so a new key counts as methodology until it is
 # deliberately added.
-OPERATIONAL_KEYS = ("edgar", "schedule", "constituents", "near_threshold", "filings.companyfacts_lag_days")
+OPERATIONAL_KEYS = (
+    "edgar",
+    "prices",
+    "publish",
+    "schedule",
+    "constituents",
+    "near_threshold",
+    "filings.companyfacts_lag_days",
+)
 
 
 class ConfigError(ValueError):
@@ -267,6 +275,21 @@ class Edgar:
 
 
 @dataclass(frozen=True)
+class Prices:
+    max_attempts: int
+    backoff_seconds: float
+
+
+@dataclass(frozen=True)
+class Publish:
+    max_error_share: float
+    max_status_change_share: float
+    max_constituent_drop: int
+    max_price_failures: int
+    max_lagging_share: float
+
+
+@dataclass(frozen=True)
 class Config:
     thresholds: dict[str, Threshold]
     market_cap: MarketCapConfig
@@ -285,6 +308,8 @@ class Config:
     business: Business
     constituents: Constituents
     edgar: Edgar
+    prices: Prices
+    publish: Publish
     hash: str
 
 
@@ -476,6 +501,35 @@ def _predecessors(raw: dict) -> dict[int, tuple[int, ...]]:
     return out
 
 
+def _prices(raw: dict) -> Prices:
+    node = _req(raw, "", "prices")
+    attempts = int(_number(node, "prices", "max_attempts"))
+    if attempts < 1:
+        raise ConfigError(f"config: 'prices.max_attempts' must be at least 1, got {attempts}")
+    return Prices(
+        max_attempts=attempts,
+        backoff_seconds=_number(node, "prices", "backoff_seconds", positive=False),
+    )
+
+
+def _publish(raw: dict) -> Publish:
+    node = _req(raw, "", "publish")
+    share = _number(node, "publish", "max_error_share", positive=False)
+    swings = _number(node, "publish", "max_status_change_share", positive=False)
+    lagging = _number(node, "publish", "max_lagging_share", positive=False)
+    shares = ("max_error_share", share), ("max_status_change_share", swings), ("max_lagging_share", lagging)
+    for name, value in shares:
+        if not 0 <= value <= 1:
+            raise ConfigError(f"config: 'publish.{name}' must be a share between 0 and 1, got {value!r}")
+    return Publish(
+        max_error_share=share,
+        max_status_change_share=swings,
+        max_constituent_drop=int(_number(node, "publish", "max_constituent_drop", positive=False)),
+        max_price_failures=int(_number(node, "publish", "max_price_failures", positive=False)),
+        max_lagging_share=lagging,
+    )
+
+
 def _business(raw: dict) -> Business:
     node = _req(raw, "", "business")
     required = tuple(_req(node, "business", "required_classifications"))
@@ -593,6 +647,8 @@ def parse_config(raw: Any) -> Config:
             cache_dir=_req(edgar, "edgar", "cache_dir"),
             cache_ttl_hours=_number(edgar, "edgar", "cache_ttl_hours"),
         ),
+        prices=_prices(raw),
+        publish=_publish(raw),
         hash=config_hash(raw),
     )
 

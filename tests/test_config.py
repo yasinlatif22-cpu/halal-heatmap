@@ -93,7 +93,14 @@ IN_HASH = {  # a change here can change a verdict
     "interest_income_sources",
     "business",
 }
-NOT_IN_HASH = {"edgar", "schedule", "constituents", "near_threshold"}  # and filings.companyfacts_lag_days
+NOT_IN_HASH = {  # and filings.companyfacts_lag_days
+    "edgar",
+    "prices",
+    "publish",
+    "schedule",
+    "constituents",
+    "near_threshold",
+}
 
 
 def test_every_config_section_is_classified_for_the_hash(raw):
@@ -119,6 +126,12 @@ def test_every_config_section_is_classified_for_the_hash(raw):
         (("constituents", "user_agent"), "someone else"),
         (("near_threshold", "margin"), 0.2),
         (("near_threshold", "mode"), "absolute"),
+        (("prices", "max_attempts"), 1),
+        (("prices", "backoff_seconds"), 60),
+        (("publish", "max_error_share"), 0.5),
+        (("publish", "max_status_change_share"), 0.9),
+        (("publish", "max_constituent_drop"), 50),
+        (("publish", "max_price_failures"), 10),
     ],
 )
 def test_operational_settings_do_not_change_the_hash(raw, cfg, path, value):
@@ -254,4 +267,19 @@ def test_monthly_day_must_be_a_day_of_the_month(raw, cfg, day):
     assert cfg.monthly_day == 1
     raw["schedule"]["monthly_day"] = day
     with pytest.raises(ConfigError, match="monthly_day"):
+        parse_config(raw)
+
+
+@pytest.mark.parametrize(
+    "section, key, value",
+    [
+        ("publish", "max_error_share", 1.5),
+        ("publish", "max_status_change_share", -0.1),
+        ("prices", "max_attempts", 0),
+        ("publish", "max_constituent_drop", True),
+    ],
+)
+def test_publish_and_price_settings_are_validated(raw, section, key, value):
+    raw[section][key] = value
+    with pytest.raises(ConfigError):
         parse_config(raw)

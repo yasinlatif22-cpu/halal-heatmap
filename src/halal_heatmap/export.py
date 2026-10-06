@@ -37,22 +37,20 @@ RATIO_LABELS = {
 UNKNOWN_REVIEWER = "Reviewer (no longer in overrides.yaml)"
 NEAR_STATUSES = ("pass", "needs_review")
 EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+NEUTRAL_REVIEWER = "maintainer"
 OVERRIDE_BY = re.compile(r"manual override by .*? on (\d{4}-\d{2}-\d{2})")
 SEC_ARCHIVE = "https://www.sec.gov/Archives/edgar/data"
 
 
 def reviewer_labels(overrides: Mapping[str, Override]) -> dict[str, str]:
-    """A neutral label for each reviewer, numbered in the order overrides.yaml names them."""
-    labels: dict[str, str] = {}
-    for override in overrides.values():
-        labels.setdefault(override.reviewer, f"Reviewer {len(labels) + 1}")
-    return labels
+    """Every reviewer is shown as the same neutral label, so no name reaches the export."""
+    return {override.reviewer: NEUTRAL_REVIEWER for override in overrides.values()}
 
 
 def scrub_text(text: str, labels: Mapping[str, str]) -> str:
     for name, label in labels.items():  # whole words only, so short names do not touch other text
         text = re.sub(rf"(?<![\w]){re.escape(name)}(?![\w])", label, text)
-    text = OVERRIDE_BY.sub(r"manual override by a reviewer on \1", text)
+    text = OVERRIDE_BY.sub(rf"manual override by {NEUTRAL_REVIEWER} on \1", text)
     return EMAIL.sub("[email removed]", text)
 
 

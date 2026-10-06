@@ -12,6 +12,7 @@ from pathlib import Path
 from halal_heatmap.config import DENOMINATORS, RATIOS, ConfigError, load_config
 from halal_heatmap.export import build_site, write_site
 from halal_heatmap.facts import UsedFact
+from halal_heatmap.gates import check_prices, check_run, check_warnings
 from halal_heatmap.overrides import load_overrides
 from halal_heatmap.runner import ForwardOnlyError, run_screen, supersede_run, update
 from halal_heatmap.sources import SourceError
@@ -19,6 +20,10 @@ from halal_heatmap.sources.edgar import EdgarClient
 from halal_heatmap.sources.prices import YFinancePrices
 from halal_heatmap.sources.wikipedia import fetch_constituents
 from halal_heatmap.store import Store
+
+
+def _prices_from(cfg) -> YFinancePrices:
+    return YFinancePrices(cfg.prices.max_attempts, cfg.prices.backoff_seconds)
 
 
 def _money(value) -> str:
@@ -219,7 +224,7 @@ def _screen(args) -> int:
             cfg,
             constituents,
             edgar,
-            YFinancePrices(),
+            _prices_from(cfg),
             overrides,
             store,
             tickers=wanted or None,
@@ -246,7 +251,7 @@ def _update(args) -> int:
     args.quiet, args.json, args.facts = True, False, False
     show = _progress(args, 0)
     try:
-        summary = update(as_of, cfg, constituents, edgar, YFinancePrices(), overrides, store, on_result=show)
+        summary = update(as_of, cfg, constituents, edgar, _prices_from(cfg), overrides, store, on_result=show)
     except ForwardOnlyError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -256,7 +261,26 @@ def _update(args) -> int:
         print(f"due: {count} ({reason})")
     for error in summary.errors:
         print(f"source: {error}", file=sys.stderr)
+    if summary.lagging:
+        print(f"lagging: {len(summary.lagging)} filing(s) not yet in companyfacts: {', '.join(summary.lagging)}")
+    if args.summary_json:
+        Path(args.summary_json).write_text(json.dumps(summary.facts(), indent=2), encoding="utf-8")
     _report(args, summary, [])
+    return 0
+
+
+def _check_run(args) -> int:
+    cfg = load_config(args.config)
+    facts = json.loads(Path(args.summary).read_text(encoding="utf-8"))
+    failures = check_run(facts, cfg.publish, accept_status_changes=args.accept_status_changes)
+    for warning in check_warnings(facts, cfg.publish):
+        print(f"warning: {warning}", file=sys.stderr)
+    for failure in failures:
+        print(f"gate failed: {failure}", file=sys.stderr)
+    if failures:
+        return 1
+    print(f"gates passed for {facts['as_of']}: {facts['constituents']} companies, "
+          f"{facts['status_changes']} status changes, {len(facts['errors'])} errors")
     return 0
 
 
@@ -282,12 +306,18 @@ def _export(args) -> int:
         return 1
     cfg = load_config(args.config)
     overrides = load_overrides(args.overrides)
-    prices = None if args.no_prices else YFinancePrices()
+    prices = None if args.no_prices else _prices_from(cfg)
     store = Store(args.db)
     try:
         payloads = build_site(store, cfg, overrides, prices)
     finally:
         store.close()
+    if prices is not None:
+        failed = payloads["meta.json"]["daily_change"]["failed"]
+        failures = check_prices(len(failed), cfg.publish)
+        if failures:
+            print(f"error: {failures[0]}: {', '.join(failed)}; nothing written", file=sys.stderr)
+            return 1
     for path in write_site(payloads, args.out):
         print(f"wrote {path}")
     meta = payloads["meta.json"]
@@ -334,7 +364,17 @@ def main(argv: list[str] | None = None) -> int:
     upd.add_argument("--config", default="config.yaml")
     upd.add_argument("--overrides", default="overrides.yaml")
     upd.add_argument("--db", default="data/screens.db")
+    upd.add_argument("--summary-json", help="write the facts the publish gates read to this file")
     upd.set_defaults(func=_update)
+    gate = sub.add_parser("check-run", help="check a run's summary against the publish gates (exit 1 on failure)")
+    gate.add_argument("summary", help="the file written by update --summary-json")
+    gate.add_argument("--config", default="config.yaml")
+    gate.add_argument(
+        "--accept-status-changes",
+        action="store_true",
+        help="accept a status-change count above its limit after reviewing it; other gates still apply",
+    )
+    gate.set_defaults(func=_check_run)
     changes = sub.add_parser("changes", help="list stored status changes and index events")
     changes.add_argument("ticker", nargs="?")
     changes.add_argument("--since", help="only from this screen date, YYYY-MM-DD")
