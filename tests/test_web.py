@@ -11,6 +11,13 @@ def test_colour_option_is_named_last_close_price_change():
     assert "Daily price change</label>" not in html
 
 
+def test_the_page_uses_one_name_for_the_price_change():
+    for name in ("index.html", "app.js"):
+        text = (WEB / name).read_text()
+        assert "Daily change" not in text
+        assert "daily change" not in text.lower().replace("last-close price change", "")
+
+
 def test_legend_states_the_close_date_it_refers_to():
     js = (WEB / "app.js").read_text()
     assert "Price change on the last close before the screen date" in js

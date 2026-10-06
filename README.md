@@ -24,8 +24,8 @@ Each stock has one of four statuses:
 They are decided in this order: business fail, then missing input, then a financial ratio fail, then
 business needs_review, then pass. Pass-only checks (below) can turn a pass into `insufficient_data`.
 
-Tiles are sized by spot market cap. Two colourings are offered: status, and the daily price change.
-The daily change is the move between the two closes before the screen date, and it is only offered
+Tiles are sized by spot market cap. Two colourings are offered: status, and the last-close price change.
+The last-close price change is the move between the two closes before the screen date, and it is only offered
 when the export includes price data.
 
 ## Methodology
@@ -136,7 +136,7 @@ Also warned, not stopped: more than 10% of the constituent list with a filing th
 companyfacts does not serve yet (`publish.max_lagging_share`). A batch of recent filings is normal; a
 large, lasting one points at companyfacts.
 
-The daily price change is exported only when every company's closes were read. A missing close stops
+The last-close price change is exported only when every company's closes were read. A missing close stops
 the export, so the site never shows partial prices.
 
 Order of steps: restore the database, screen, check the gates, export, save the database, deploy. The
@@ -196,7 +196,7 @@ export SEC_USER_AGENT="halal-heatmap/0.1 (you@example.com)"
 .venv/bin/halal-heatmap screen AAPL MSFT --facts      # audit records for some tickers
 .venv/bin/halal-heatmap update                        # what the schedule runs
 .venv/bin/halal-heatmap changes [TICKER] [--since D]  # status changes and index events
-.venv/bin/halal-heatmap export --no-prices            # site data, without the daily price change
+.venv/bin/halal-heatmap export --no-prices            # site data, without the last-close price change
 python3 -m http.server 8000 --directory web           # then open http://localhost:8000
 ```
 

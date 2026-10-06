@@ -174,7 +174,7 @@
       `<b>${esc(s.ticker)}</b> ${esc(s.name)}`,
       `${esc(STATUS[s.status].label)}${isNear(s) ? ' · within the margin of a limit' : ''}`,
       `Market cap (spot) ${money(s.spot_market_cap)}`,
-      `Daily change ${s.daily_change ? `${signedPct(s.daily_change.pct)} on ${esc(s.daily_change.date)}` : 'not available'}`,
+      `Last-close price change ${s.daily_change ? `${signedPct(s.daily_change.pct)} on ${esc(s.daily_change.date)}` : 'not available'}`,
       `Basis: ${esc(BASIS[s.interest_income.key].short)}${lowerBasis(s) ? ' (lower confidence)' : ''}`,
       'Click for the audit record',
     ];
@@ -494,7 +494,7 @@
       <dl class="kv">
         <dt>Screen date</dt><dd>${esc(s.screen_date)}</dd>
         <dt>Driving market cap</dt><dd>${esc(s.market_cap.driving)}</dd>
-        <dt>Daily change</dt><dd>${change}</dd>
+        <dt>Last-close price change</dt><dd>${change}</dd>
         <dt>Methodology</dt><dd>${esc(s.config_hash)}</dd>
       </dl>
       <h3>Financial ratios</h3>
@@ -590,7 +590,7 @@
       notices.push(`These results were screened under methodology ${meta.config_hash}, but the current config.yaml is ${meta.current_config_hash}. Re-run the screen before relying on them.`);
     }
     if (!meta.daily_change.included) {
-      notices.push('The daily price change is not in this export.');
+      notices.push('The last-close price change is not in this export.');
     }
     if (meta.counts.screened_before_latest_date) {
       notices.push(`${meta.counts.screened_before_latest_date} stock(s) were last screened before ${meta.screen_date}.`);
@@ -621,7 +621,7 @@
       ? `${m.window_months[m.driving]}-month average of daily market cap`
       : 'latest close';
     el.mcapDesc.textContent = `Verdicts use the ${driving}: closing price × reported shares, with at least ${pct(m.min_coverage, 0)} of expected trading days present. Spot is the latest close, no older than ${m.max_spot_age_days} days; the 36-month average is also stored. Spot and averaged market cap are flagged when they differ by more than ${number(m.spot_divergence_factor)}×.`;
-    el.dataDesc.textContent = `Constituents: ${meta.constituents_as_of || 'n/a'}. Screens: ${meta.run_ids.length} run(s), latest ${meta.screen_date}. Filings and XBRL: SEC EDGAR. Prices: yfinance (unofficial), daily change only, from the two closes before each screen date. Override reviewers are shown as neutral labels.`;
+    el.dataDesc.textContent = `Constituents: ${meta.constituents_as_of || 'n/a'}. Screens: ${meta.run_ids.length} run(s), latest ${meta.screen_date}. Filings and XBRL: SEC EDGAR. Prices: yfinance (unofficial), last-close price change only, from the two closes before each screen date. Override reviewers are shown as neutral labels.`;
   }
 
   /* ---------- wiring ---------- */
