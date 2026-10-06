@@ -25,6 +25,10 @@ on:
         description: "First run only: create the data branch and start a new database. Refused when the branch exists."
         type: boolean
         default: false
+      force_publish:
+        description: "Export, package and deploy even when nothing was stored. The gates still must pass; the data branch is not touched."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -92,8 +96,10 @@ jobs:
           halal-heatmap check-run "$RUNNER_TEMP/run.json" "${args[@]}"
           echo "stored=$(jq -r '.stored' "$RUNNER_TEMP/run.json")" >> "$GITHUB_OUTPUT"
 
+      # Export, package and deploy run on a stored run, or on a forced one. Each condition has no status function,
+      # so GitHub still skips them when a gate fails: the gates step is the only one with no condition.
       - name: Export the site data
-        if: steps.gates.outputs.stored == 'true'
+        if: steps.gates.outputs.stored == 'true' || inputs.force_publish
         run: halal-heatmap export
 
       # Reads of the data branch are unauthenticated: the repository is public. Only the push below has a token.
@@ -126,14 +132,14 @@ jobs:
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/data
 
       - name: Package the site
-        if: steps.gates.outputs.stored == 'true'
+        if: steps.gates.outputs.stored == 'true' || inputs.force_publish
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: web
 
   deploy:
     needs: screen
-    if: needs.screen.outputs.stored == 'true'
+    if: needs.screen.outputs.stored == 'true' || inputs.force_publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
