@@ -44,12 +44,16 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          persist-credentials: true
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
           python-version: "3.10"
-      - name: Install
-        run: python -m pip install .
+      - name: Install the pinned dependencies
+        # Exact pins from requirements-lock.txt, then the package itself without resolving anything else.
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements-lock.txt
+          python -m pip install --no-deps --no-build-isolation .
 
       - name: Restore the database from the data branch
         env:
@@ -92,7 +96,8 @@ jobs:
         if: steps.gates.outputs.stored == 'true'
         run: halal-heatmap export
 
-      - name: Save the database to the data branch
+      # Reads of the data branch are unauthenticated: the repository is public. Only the push below has a token.
+      - name: Commit the database to the data branch
         if: steps.gates.outputs.stored == 'true'
         run: |
           set -euo pipefail
@@ -109,7 +114,16 @@ jobs:
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
               commit -m "screen run $GITHUB_RUN_ID"
-          git push origin HEAD:refs/heads/data
+
+      # The only step that sees the token. It is not echoed, and the URL is not printed.
+      - name: Push the data branch
+        if: steps.gates.outputs.stored == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/data-branch"
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/data
 
       - name: Package the site
         if: steps.gates.outputs.stored == 'true'
