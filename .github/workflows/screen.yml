@@ -39,7 +39,7 @@ concurrency:
 
 jobs:
   screen:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
       contents: write  # pushes the database to the data branch, only after the gates and export pass
@@ -140,7 +140,7 @@ jobs:
   deploy:
     needs: screen
     if: needs.screen.outputs.stored == 'true' || inputs.force_publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       pages: write
@@ -151,4 +151,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@f33f41b675f0ab2dc5a6863c9a170fe83af3571e # v4.0.0
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
