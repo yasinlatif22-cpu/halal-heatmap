@@ -287,12 +287,26 @@
 
   /* ---------- legend, list, counts ---------- */
 
+  // The close the change is measured on, from the exported daily_change.date. Most companies share one date; when
+  // they do not, the most common one is named and the note says that some use an earlier close.
+  function changeDate() {
+    const counts = new Map();
+    for (const s of members) {
+      if (s.daily_change) counts.set(s.daily_change.date, (counts.get(s.daily_change.date) || 0) + 1);
+    }
+    if (!counts.size) return null;
+    const [date] = [...counts].sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))[0];
+    return { date, mixed: counts.size > 1 };
+  }
+
   function drawLegend(scale) {
     const swatch = (cls, glyph) => `<span class="swatch ${cls}" aria-hidden="true">${glyph}</span>`;
     if (colourMode() === 'change') {
+      const day = changeDate();
+      const when = day ? `(${esc(day.date)})${day.mixed ? ', some companies use an earlier close' : ''}` : '';
       el.legend.innerHTML = `
         <span class="item"><span class="gradient" style="background:linear-gradient(to right, rgb(${DOWN}), #fff, rgb(${UP}))"></span>
-          <span>−${trimPct(scale)} to +${trimPct(scale)} daily change, dimmed tiles are filtered out</span></span>
+          <span>Price change on the last close before the screen date ${when}: −${trimPct(scale)} to +${trimPct(scale)}, dimmed tiles are filtered out</span></span>
         <span class="item">${swatch('pass-near', '◆')} Within ${esc(marginText())}: yellow border</span>
         <span class="item">${swatch('review-near', '◆')} Needs review within ${esc(marginText())}: hatched</span>
         <span class="item"><span class="glyph" aria-hidden="true">${BASIS_GLYPH}</span> Lower-confidence interest basis</span>`;
