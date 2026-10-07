@@ -38,10 +38,12 @@
         <form class="lookup" id="lookup" role="search">
           <label for="lookup-q">Find a stock</label>
           <div class="lookup-row">
-            <input id="lookup-q" name="q" type="text" autocomplete="off" spellcheck="false"
+            <input id="lookup-q" name="q" type="text" autocomplete="off" spellcheck="false" role="combobox"
+                   aria-expanded="false" aria-controls="lookup-results" aria-autocomplete="list"
                    placeholder="Ticker or company, e.g. AAPL or BRK.B">
             <button type="submit" class="btn primary">Open</button>
           </div>
+          <ul class="lookup-results" id="lookup-results" role="listbox" aria-label="Matching stocks" hidden></ul>
           <p class="lookup-msg" id="lookup-msg" role="status"></p>
         </form>
       </div>
@@ -280,27 +282,81 @@
     })();
   </script>
   <script>
-    // Ticker search from the landing page. It uses data/ticker_index.json, written by the export. If the index is
-    // missing, the search opens tool/#TICKER with the text typed, and the tool resolves it.
+    // Ticker search from the landing page. It uses data/ticker_index.json, written by the export. Typing lists the
+    // matches. Submitting opens a single match; with two or more, the reader picks one (arrow keys or a click). If the
+    // index is missing, the search opens tool/#TICKER with the text typed, and the tool resolves it.
     (function () {
       var form = document.getElementById('lookup');
       var input = document.getElementById('lookup-q');
+      var list = document.getElementById('lookup-results');
       var message = document.getElementById('lookup-msg');
       var index = null;
+      var matches = [];
+      var active = -1;
+      var picked = false;
+      var SHOW = 20;
       fetch('data/ticker_index.json', { cache: 'no-cache' })
         .then(function (response) { if (!response.ok) throw new Error(String(response.status)); return response.json(); })
         .then(function (data) { index = data.stocks; })
         .catch(function () { index = null; });
       // Share-class tickers match with or without the dot or hyphen: BRKB, BRK-B and BRK.B all find BRK.B.
       function norm(text) { return String(text).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
-      function find(query) {
+      // Exact ticker first, then ticker prefix, then company name. Each stock appears once.
+      function findAll(query) {
         var key = norm(query);
         var needle = query.trim().toLowerCase();
-        var exact = index.filter(function (s) { return norm(s.ticker) === key; })[0];
-        if (exact) return exact;
-        var prefix = index.filter(function (s) { return key && norm(s.ticker).indexOf(key) === 0; })[0];
-        if (prefix) return prefix;
-        return index.filter(function (s) { return s.name.toLowerCase().indexOf(needle) !== -1; })[0] || null;
+        var seen = {};
+        var out = [];
+        function add(hits) { hits.forEach(function (s) { if (!seen[s.ticker]) { seen[s.ticker] = true; out.push(s); } }); }
+        if (!key && !needle) return out;
+        add(index.filter(function (s) { return norm(s.ticker) === key; }));
+        add(index.filter(function (s) { return key && norm(s.ticker).indexOf(key) === 0; }));
+        add(index.filter(function (s) { return needle && s.name.toLowerCase().indexOf(needle) !== -1; }));
+        return out;
+      }
+      function go(stock) { location.href = 'tool/#' + encodeURIComponent(stock.ticker); }
+      function hideList() {
+        list.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+      }
+      function paint() {
+        list.innerHTML = '';
+        matches.slice(0, SHOW).forEach(function (stock, i) {
+          var item = document.createElement('li');
+          item.id = 'lookup-opt-' + i;
+          item.setAttribute('role', 'option');
+          item.setAttribute('aria-selected', String(i === active));
+          var ticker = document.createElement('span');
+          ticker.className = 'lookup-ticker';
+          ticker.textContent = stock.ticker;
+          var name = document.createElement('span');
+          name.className = 'lookup-name';
+          name.textContent = stock.name;
+          item.appendChild(ticker);
+          item.appendChild(name);
+          item.addEventListener('mousedown', function (event) { event.preventDefault(); go(stock); });
+          list.appendChild(item);
+        });
+        if (matches.length > SHOW) {
+          var more = document.createElement('li');
+          more.className = 'lookup-more';
+          more.textContent = (matches.length - SHOW) + ' more: type more of the ticker or name to narrow the list';
+          list.appendChild(more);
+        }
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        input.setAttribute('aria-activedescendant', active >= 0 ? 'lookup-opt-' + active : '');
+      }
+      // Typing only lists the matches. Nothing opens until the reader submits or picks one.
+      function typed() {
+        var query = input.value.trim();
+        picked = false;
+        message.textContent = '';
+        matches = index && query ? findAll(query) : [];
+        if (!matches.length) { active = -1; hideList(); return; }
+        active = 0;
+        paint();
       }
       form.addEventListener('submit', function (event) {
         event.preventDefault();
@@ -308,10 +364,35 @@
         message.textContent = '';
         if (!query) return;
         if (!index) { location.href = 'tool/#' + encodeURIComponent(query); return; }
-        var hit = find(query);
-        if (!hit) { message.textContent = 'No S&P 500 stock matches "' + query + '".'; return; }
-        location.href = 'tool/#' + encodeURIComponent(hit.ticker);
+        matches = findAll(query);
+        if (matches.length === 1) { go(matches[0]); return; }
+        if (matches.length === 0) {
+          hideList();
+          message.textContent = 'No S&P 500 stock matches "' + query + '".';
+          return;
+        }
+        if (picked && active >= 0) { go(matches[active]); return; }
+        active = 0;
+        paint();
       });
+      input.addEventListener('input', typed);
+      input.addEventListener('keydown', function (event) {
+        if (list.hidden || !matches.length) return;
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          var step = event.key === 'ArrowDown' ? 1 : -1;
+          var shown = Math.min(matches.length, SHOW);
+          active = (active + step + shown) % shown;
+          picked = true;
+          paint();
+        } else if (event.key === 'Enter' && picked && active >= 0 && matches[active]) {
+          event.preventDefault();
+          go(matches[active]);
+        } else if (event.key === 'Escape') {
+          hideList();
+        }
+      });
+      input.addEventListener('blur', function () { setTimeout(hideList, 150); });
     })();
   </script>
 </body>

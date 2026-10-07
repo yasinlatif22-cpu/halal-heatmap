@@ -301,3 +301,49 @@ def test_the_stale_notice_shows_the_count_when_stocks_missed_the_cycle(site, pag
         assert "screen cycle" in page.text_content("#banner")
     finally:
         page.unroute("**/data/meta.json")
+
+
+def _landing_options(page):
+    return page.eval_on_selector_all(
+        "#lookup-results li[role='option']",
+        "els => els.map((e) => e.querySelector('.lookup-ticker').textContent)",
+    )
+
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [("goog", ["GOOG", "GOOGL"]), ("fox", ["FOX", "FOXA"]), ("alphabet", ["GOOG", "GOOGL"])],
+)
+def test_landing_search_lists_every_match_instead_of_opening_one(site, page, query, expected):
+    page.goto(f"{site}/")
+    page.fill("#lookup-q", query)
+    page.wait_for_selector("#lookup-results li[role='option']")
+    assert _landing_options(page) == expected
+    assert page.url.endswith("/")  # several matches: nothing opens until the reader picks one
+
+
+def test_landing_search_opens_the_stock_the_reader_picks_with_the_keyboard(site, page):
+    page.goto(f"{site}/")
+    page.fill("#lookup-q", "goog")
+    page.wait_for_selector("#lookup-results li[role='option']")
+    page.press("#lookup-q", "ArrowDown")
+    page.press("#lookup-q", "Enter")
+    page.wait_for_url("**/tool/#GOOGL")
+
+
+def test_landing_search_does_not_open_while_typing_an_exact_single_match(site, page):
+    page.goto(f"{site}/")
+    page.type("#lookup-q", "BRK", delay=50)  # BRK.B is the only match on the way, but the reader has not submitted
+    page.wait_for_selector("#lookup-results li[role='option']")
+    page.wait_for_timeout(300)
+    assert page.url.endswith("/")
+    page.press("#lookup-q", "Enter")
+    page.wait_for_url("**/tool/#BRK.B")
+
+
+def test_landing_search_escape_closes_the_list(site, page):
+    page.goto(f"{site}/")
+    page.fill("#lookup-q", "goog")
+    page.wait_for_selector("#lookup-results li[role='option']")
+    page.press("#lookup-q", "Escape")
+    assert not page.is_visible("#lookup-results")

@@ -179,3 +179,10 @@ section.disclaimer p:last-child { margin-bottom: 0; }
 .lookup-row { display: flex; gap: 8px; }
 .lookup-row input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid #c9ced6; font: inherit; background: #fff; color: inherit; }
 .lookup-msg { margin: 8px 0 0; font-size: 14px; min-height: 1em; }
+.lookup { position: relative; }
+.lookup-results { position: absolute; left: 0; right: 0; z-index: 20; margin: 0; padding: 0; list-style: none; max-height: 320px; overflow-y: auto; background: #fff; border: 1px solid #c9ced6; border-top: 0; }
+.lookup-results li { display: flex; gap: 12px; padding: 9px 12px; border-bottom: 1px solid #e5e8ec; cursor: pointer; font-size: 15px; }
+.lookup-results li[aria-selected="true"] { background: #eef2f7; }
+.lookup-ticker { font-weight: 600; min-width: 4.5em; font-variant-numeric: tabular-nums; }
+.lookup-name { color: #4b5563; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lookup-more { color: #4b5563; font-size: 13px; cursor: default; }
