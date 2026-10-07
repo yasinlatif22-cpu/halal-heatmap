@@ -295,3 +295,20 @@ def test_a_dotted_ticker_is_fetched_under_yfinance_symbol(monkeypatch):
     monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(Ticker=Ticker))
     YFinancePrices(1, 0).history("BRK.B", date(2026, 8, 1), date(2026, 8, 4))
     assert seen == ["BRK-B"]
+
+
+def test_a_stray_pipe_after_a_name_is_not_part_of_the_name(cfg):
+    # Wikipedia's ResMed row has a literal "|" after the link. The name must come out clean.
+    data = rows(500)
+    data[1] = ("RMD", "ResMed|", "Health Care", "Health Care Equipment", "0000943819")
+    parsed = parse_constituents(wiki_html(data), cfg.constituents)
+    assert next(c.name for c in parsed if c.ticker == "RMD") == "ResMed"
+
+
+def test_clean_name_keeps_real_punctuation():
+    from halal_heatmap.sources.wikipedia import clean_name
+
+    assert clean_name("Brown–Forman") == "Brown–Forman"
+    assert clean_name("Estée Lauder Companies (The)") == "Estée Lauder Companies (The)"
+    assert clean_name("Yum! Brands") == "Yum! Brands"
+    assert clean_name("Alpha[a]  Corp​") == "Alpha Corp"

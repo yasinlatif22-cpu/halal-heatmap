@@ -471,13 +471,23 @@
   /* ---------- command search ---------- */
 
   // Ticker first, then ticker prefix, then company name. Searches the whole export, so a stock outside the index still opens.
+  // Share-class tickers match with or without the dot or hyphen: BRKB, BRK-B and BRK.B all find BRK.B.
+  const normTicker = (text) => String(text).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  function resolveTicker(text) {
+    if (byTicker.has(text)) return text;
+    const key = normTicker(text);
+    const hit = screens.find((s) => normTicker(s.ticker) === key);
+    return hit ? hit.ticker : null;
+  }
+
   function matchesFor(query) {
     const needle = query.trim().toLowerCase();
+    const key = normTicker(query);
     if (!needle) return [];
     const rank = (s) => {
-      const ticker = s.ticker.toLowerCase();
-      if (ticker === needle) return 0;
-      if (ticker.startsWith(needle)) return 1;
+      const ticker = normTicker(s.ticker);
+      if (ticker === key) return 0;
+      if (key && ticker.startsWith(key)) return 1;
       if (s.name.toLowerCase().includes(needle)) return 2;
       return null;
     };
@@ -781,8 +791,10 @@
     if (!meta.daily_change.included) {
       notices.push('The last-close price change is not in this export.');
     }
-    if (meta.counts.screened_before_latest_date) {
-      notices.push(`${meta.counts.screened_before_latest_date} stock(s) were last screened before ${meta.screen_date}.`);
+    // Only a stock screened before the monthly cycle started has missed its full screen. Incremental runs do not count.
+    if (meta.counts.stale_before_cycle) {
+      notices.push(`${meta.counts.stale_before_cycle} stock(s) were last screened before ${meta.cycle_start}, ` +
+        'the start of the monthly screen cycle, and may be out of date.');
     }
     if (notices.length) {
       el.banner.innerHTML = notices.map((n) => `<p>${esc(n)}</p>`).join('');
@@ -962,8 +974,8 @@
   }
 
   function openFromHash() {
-    const ticker = decodeURIComponent(location.hash.slice(1));
-    if (byTicker.has(ticker) && ticker !== selected) openDetail(ticker);
+    const ticker = resolveTicker(decodeURIComponent(location.hash.slice(1)));
+    if (ticker && ticker !== selected) openDetail(ticker);
   }
 
   start();

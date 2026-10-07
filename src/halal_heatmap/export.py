@@ -22,6 +22,7 @@ from halal_heatmap.overrides import Override
 from halal_heatmap.screen.financial import near_threshold_flag
 from halal_heatmap.sources import SourceError
 from halal_heatmap.sources.prices import PriceSource
+from halal_heatmap.sources.wikipedia import clean_name
 from halal_heatmap.store import Store
 
 DISCLAIMER = (
@@ -338,7 +339,11 @@ def build_site(
     snapshot = store.latest_snapshot()
     snapshot_date, members = snapshot if snapshot else (None, {})
     member = {
-        ticker: {"name": row["name"], "sector": row["gics_sector"], "sub_industry": row["gics_sub_industry"]}
+        ticker: {
+            "name": clean_name(row["name"]),
+            "sector": row["gics_sector"],
+            "sub_industry": row["gics_sub_industry"],
+        }
         for ticker, row in members.items()
     }
 
@@ -384,6 +389,9 @@ def build_site(
     hashes = sorted({s["config_hash"] for s in screens})
     run_ids = sorted({s["run_id"] for s in screens})
     latest_screen = max((s["screen_date"] for s in screens), default=None)
+    # The monthly cycle starts on day 1 of the latest screen's month. A stock screened before that day has missed the
+    # monthly full screen; a stock screened since then is current, however many days ago that was.
+    cycle_start = f"{latest_screen[:8]}01" if latest_screen else None
     meta = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "screen_date": latest_screen,
@@ -392,6 +400,7 @@ def build_site(
         "current_config_hash": cfg.hash,
         "config_matches": hashes == [cfg.hash],
         "constituents_as_of": snapshot_date,
+        "cycle_start": cycle_start,
         "disclaimer": DISCLAIMER,
         "thresholds": {
             name: {"label": RATIO_LABELS[name], "limit": t.limit, "operator": t.operator}
@@ -419,7 +428,7 @@ def build_site(
             "sized": sum(1 for s in screens if s["spot_market_cap"] is not None),
             "near_threshold": sum(1 for s in screens if s["near_threshold"]),
             "lower_confidence_basis": sum(1 for s in screens if s["interest_income"]["confidence"] == "lower"),
-            "screened_before_latest_date": sum(1 for s in screens if s["screen_date"] != latest_screen),
+            "stale_before_cycle": sum(1 for s in screens if cycle_start and s["screen_date"] < cycle_start),
         },
     }
     meta["unsized"] = [
@@ -432,6 +441,10 @@ def build_site(
         "screens.json": {"screens": screens},
         "changes.json": {"changes": changes, "index_events": index_events},
         "meta.json": meta,
+        # Tickers and names only, for the landing page's search. Same rows as screens.json, written in the same export.
+        "ticker_index.json": {
+            "stocks": [{"ticker": s["ticker"], "name": s["name"]} for s in sorted(screens, key=lambda s: s["ticker"])],
+        },
     }
     return scrub(payloads, labels)
 

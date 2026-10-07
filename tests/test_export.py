@@ -75,7 +75,7 @@ def test_the_export_shows_the_latest_valid_screen_of_each_stock(world, cfg, stor
     site = build_site(store, cfg, OVR)
     assert screen_of(site, "PASS")["screen_date"] == "2026-08-03"
     assert screen_of(site, "DEBT")["screen_date"] == "2026-06-01"
-    assert site["meta.json"]["counts"]["screened_before_latest_date"] == 3
+    assert site["meta.json"]["counts"]["stale_before_cycle"] == 3
 
     supersede_run(store, later.run_id, "bad run")
     site = build_site(store, cfg, OVR)
@@ -288,3 +288,29 @@ def _basis_row(**changes):
 def test_every_basis_but_disclosed_gross_interest_is_lower_confidence(changes, key, confidence):
     basis = _interest_basis(_basis_row(**changes))
     assert (basis["key"], basis["confidence"]) == (key, confidence)
+
+
+def test_an_incremental_run_after_the_monthly_cycle_leaves_nothing_stale(world, cfg, store):
+    # The monthly full screen on day 1 covers every stock; a later run that screens only one stock is healthy.
+    screen(world, cfg, store, date(2026, 8, 1), ALL)
+    screen(world, cfg, store, date(2026, 8, 10), ["PASS"])
+    meta = build_site(store, cfg, OVR)["meta.json"]
+    assert meta["cycle_start"] == "2026-08-01"
+    assert meta["counts"]["stale_before_cycle"] == 0
+
+
+def test_a_stock_left_from_before_the_cycle_start_is_stale(world, cfg, store):
+    screen(world, cfg, store, date(2026, 7, 20), ALL)
+    screen(world, cfg, store, date(2026, 8, 10), ["PASS"])
+    meta = build_site(store, cfg, OVR)["meta.json"]
+    assert meta["cycle_start"] == "2026-08-01"
+    assert meta["counts"]["stale_before_cycle"] == 3
+
+
+def test_the_ticker_index_lists_every_screened_stock_with_its_clean_name(world, cfg, store):
+    screen(world, cfg, store, date(2026, 8, 1), ALL)
+    site = build_site(store, cfg, OVR)
+    index = site["ticker_index.json"]["stocks"]
+    assert [row["ticker"] for row in index] == sorted(s["ticker"] for s in site["screens.json"]["screens"])
+    assert set(index[0]) == {"ticker", "name"}  # tickers and names only: no verdicts in the index
+    assert all(row["name"] == screen_of(site, row["ticker"])["name"] for row in index)

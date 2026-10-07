@@ -172,3 +172,10 @@ section.disclaimer p:last-child { margin-bottom: 0; }
 .faq summary { cursor: pointer; font-weight: 600; color: var(--ink); font-size: 17px; list-style-position: outside; }
 .faq summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
 .faq details p { margin: 12px 0 0; max-width: 70ch; }
+
+/* Ticker search in the hero */
+.lookup { margin-top: 18px; max-width: 520px; }
+.lookup label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.lookup-row { display: flex; gap: 8px; }
+.lookup-row input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid #c9ced6; font: inherit; background: #fff; color: inherit; }
+.lookup-msg { margin: 8px 0 0; font-size: 14px; min-height: 1em; }

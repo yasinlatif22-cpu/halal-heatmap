@@ -240,3 +240,64 @@ def test_the_tool_loads_its_own_fonts_and_nothing_from_a_third_party(site, page)
         page.remove_listener("request", record)
     assert "Mirsad Mono" in loaded and "Mirsad Condensed" in loaded
     assert hosts == {"127.0.0.1"}, hosts
+
+
+@pytest.mark.parametrize("typed", ["BRKB", "BRK-B", "BRK.B", "brk.b"])
+def test_landing_search_finds_a_share_class_however_it_is_typed(site, page, typed):
+    page.goto(f"{site}/")
+    page.fill("#lookup-q", typed)
+    page.press("#lookup-q", "Enter")
+    page.wait_for_url("**/tool/#BRK.B")
+    page.wait_for_function("document.querySelector('#detail h2')?.textContent.includes('BRK.B')")
+
+
+def test_tool_hash_with_a_hyphen_opens_the_dotted_ticker(site, page):
+    _open(page, f"{site}/tool/#BRK-B")
+    page.wait_for_function("document.querySelector('#detail h2')?.textContent.includes('BRK.B')")
+
+
+def test_tool_search_finds_a_share_class_without_the_dot(site, page):
+    _open(page, f"{site}/tool/")
+    page.fill("#q", "BRKB")
+    page.wait_for_selector("#q-results li[aria-selected='true']")
+    page.press("#q", "Enter")
+    page.wait_for_function("document.querySelector('#detail h2').textContent.includes('BRK.B')")
+
+
+def test_landing_search_finds_a_company_by_name(site, page):
+    page.goto(f"{site}/")
+    page.fill("#lookup-q", "resmed")
+    page.press("#lookup-q", "Enter")
+    page.wait_for_url("**/tool/#RMD")
+
+
+def test_landing_search_says_when_nothing_matches(site, page):
+    page.goto(f"{site}/")
+    page.fill("#lookup-q", "ZZZZ9")
+    page.press("#lookup-q", "Enter")
+    page.wait_for_function("document.getElementById('lookup-msg').textContent.includes('No S&P 500 stock')")
+    assert "tool/" not in page.url
+
+
+def test_the_stale_notice_is_hidden_after_a_healthy_run(site, page):
+    _open(page, f"{site}/tool/")
+    assert "last screened before" not in page.text_content("#banner")
+
+
+def test_the_stale_notice_shows_the_count_when_stocks_missed_the_cycle(site, page):
+    import json as _json
+
+    def stale_meta(route):
+        meta = _json.loads((WEB / "data" / "meta.json").read_text())
+        meta["counts"]["stale_before_cycle"] = 3
+        meta["cycle_start"] = "2026-10-01"
+        route.fulfill(status=200, content_type="application/json", body=_json.dumps(meta))
+
+    page.route("**/data/meta.json", stale_meta)
+    try:
+        _open(page, f"{site}/tool/")
+        page.wait_for_function("document.getElementById('banner').textContent.includes('3 stock(s)')")
+        assert "since 2026-10-01" not in page.text_content("#banner")
+        assert "screen cycle" in page.text_content("#banner")
+    finally:
+        page.unroute("**/data/meta.json")

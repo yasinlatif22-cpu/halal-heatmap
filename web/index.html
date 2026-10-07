@@ -35,6 +35,15 @@
           <a class="btn primary" href="tool/">Open the heatmap</a>
           <a class="btn secondary" href="#verdict">How a verdict is made</a>
         </div>
+        <form class="lookup" id="lookup" role="search">
+          <label for="lookup-q">Find a stock</label>
+          <div class="lookup-row">
+            <input id="lookup-q" name="q" type="text" autocomplete="off" spellcheck="false"
+                   placeholder="Ticker or company, e.g. AAPL or BRK.B">
+            <button type="submit" class="btn primary">Open</button>
+          </div>
+          <p class="lookup-msg" id="lookup-msg" role="status"></p>
+        </form>
       </div>
       <div class="hero-preview">
         <div class="status-counts" id="status-counts" hidden>
@@ -268,6 +277,41 @@
         .catch(function () {
           show('ex-verdict', 'The example could not be loaded right now. The heatmap shows every company.');
         });
+    })();
+  </script>
+  <script>
+    // Ticker search from the landing page. It uses data/ticker_index.json, written by the export. If the index is
+    // missing, the search opens tool/#TICKER with the text typed, and the tool resolves it.
+    (function () {
+      var form = document.getElementById('lookup');
+      var input = document.getElementById('lookup-q');
+      var message = document.getElementById('lookup-msg');
+      var index = null;
+      fetch('data/ticker_index.json', { cache: 'no-cache' })
+        .then(function (response) { if (!response.ok) throw new Error(String(response.status)); return response.json(); })
+        .then(function (data) { index = data.stocks; })
+        .catch(function () { index = null; });
+      // Share-class tickers match with or without the dot or hyphen: BRKB, BRK-B and BRK.B all find BRK.B.
+      function norm(text) { return String(text).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+      function find(query) {
+        var key = norm(query);
+        var needle = query.trim().toLowerCase();
+        var exact = index.filter(function (s) { return norm(s.ticker) === key; })[0];
+        if (exact) return exact;
+        var prefix = index.filter(function (s) { return key && norm(s.ticker).indexOf(key) === 0; })[0];
+        if (prefix) return prefix;
+        return index.filter(function (s) { return s.name.toLowerCase().indexOf(needle) !== -1; })[0] || null;
+      }
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var query = input.value.trim();
+        message.textContent = '';
+        if (!query) return;
+        if (!index) { location.href = 'tool/#' + encodeURIComponent(query); return; }
+        var hit = find(query);
+        if (!hit) { message.textContent = 'No S&P 500 stock matches "' + query + '".'; return; }
+        location.href = 'tool/#' + encodeURIComponent(hit.ticker);
+      });
     })();
   </script>
 </body>
