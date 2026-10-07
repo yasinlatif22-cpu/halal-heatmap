@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 
@@ -17,6 +18,16 @@ COLUMNS = {
     "gics_sub_industry": "gics sub-industry",
     "cik": "cik",
 }
+
+
+# Stray text the Wikipedia table carries around a name: a pipe left after a link (ResMed), footnote markers such as
+# [a], and zero-width characters. Nothing here is part of a company name.
+_STRAY = re.compile(r"[|\u200b\u200c\u200d\ufeff]|\[[^\]]*\]")
+
+
+def clean_name(text: str) -> str:
+    """A company name as it should be shown: the stray text removed, the spaces collapsed."""
+    return " ".join(_STRAY.sub("", text).split())
 
 
 @dataclass(frozen=True)
@@ -84,7 +95,7 @@ def parse_constituents(html: str, cfg: Constituents) -> list[Constituent]:
         out.append(
             Constituent(
                 ticker=row[index["ticker"]].upper(),
-                name=row[index["name"]],
+                name=clean_name(row[index["name"]]),
                 gics_sector=row[index["gics_sector"]],
                 gics_sub_industry=row[index["gics_sub_industry"]],
                 cik=int(cik),

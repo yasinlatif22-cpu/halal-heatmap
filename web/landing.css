@@ -1,0 +1,130 @@
+/* Mirsad landing page: the tool's dark, flat, dense style. Hairline rules, no radii, shadows or gradients.
+   Fonts are the self-hosted Mirsad faces from fonts.css. Nothing here loads from another host. */
+:root {
+  color-scheme: dark;
+  --bg: #0a0b0d;
+  --panel: #0f1115;
+  --raise: #15181d;
+  --line: #262b33;
+  --line-2: #343a44;
+  --ink: #e5e7eb;
+  --ink-2: #aeb4bd;
+  --ink-3: #8b929c;
+  --link: #60a5fa;
+  --pass: #1f9d55;
+  --review: #f59e0b;
+  --fail: #b3261e;
+  --insuf: #8b929c;
+  --pass-ink: #4ade80;
+  --review-ink: #fbbf24;
+  --fail-ink: #f87171;
+  --mono: "Mirsad Mono", ui-monospace, Menlo, monospace;
+  --cond: "Mirsad Condensed", "Arial Narrow", sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); }
+body { font-family: var(--cond); font-size: 16px; line-height: 1.45; }
+a { color: var(--link); }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+p { margin: 0; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+.muted { color: var(--ink-2); }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.mark-tiles { display: inline-grid; grid-template-columns: 1fr 1fr; gap: 2px; width: 16px; height: 16px; flex: none; }
+.mark-tiles i { display: block; }
+.s-pass { background: var(--pass); }
+.s-review { background: var(--review); }
+.s-fail { background: var(--fail); }
+.s-insuf { background: var(--insuf); }
+.panel-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+
+/* header and the notice that comes first */
+.top { border-bottom: 1px solid var(--line); }
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; min-height: 52px; padding: 8px 16px; max-width: 1200px; margin: 0 auto; }
+.wordmark { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 700; font-size: 22px; letter-spacing: 0.02em; text-transform: uppercase; }
+.links { display: flex; flex-wrap: wrap; gap: 4px; }
+.links a { padding: 6px 10px; color: var(--ink-2); text-decoration: none; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.links a:hover { color: var(--ink); }
+.notice { padding: 10px 16px; border-bottom: 1px solid var(--line-2); background: var(--panel); color: var(--ink); font-size: 15px; max-width: none; }
+.notice b { color: var(--review-ink); font-weight: 600; }
+
+main { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 28px; padding: 28px 0 24px; border-bottom: 1px solid var(--line); }
+.hero h1 { font-size: 34px; line-height: 1.08; font-weight: 700; letter-spacing: -0.01em; }
+.lede { margin-top: 12px; color: var(--ink-2); font-size: 17px; max-width: 58ch; }
+
+.lookup { margin-top: 20px; max-width: 560px; position: relative; }
+.lookup > label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); margin-bottom: 6px; }
+.lookup-row { display: flex; align-items: stretch; height: 44px; border: 1px solid var(--line-2); background: var(--panel); }
+.lookup-row:focus-within { border-color: var(--link); }
+.prompt { display: flex; align-items: center; padding: 0 8px 0 12px; color: var(--ink-3); font-family: var(--mono); }
+.lookup-row input { flex: 1; min-width: 0; border: 0; background: transparent; font-family: var(--mono); font-size: 15px; outline: none; }
+.lookup-row input::placeholder { color: var(--ink-3); }
+.go { padding: 0 16px; border: 0; border-left: 1px solid var(--line-2); background: var(--raise); font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.go:hover { background: #1c2027; }
+.lookup-results { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin: 0; padding: 0; list-style: none; max-height: 340px; overflow-y: auto; background: var(--panel); border: 1px solid var(--line-2); border-top: 0; }
+.lookup-results li { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 12px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 15px; }
+.lookup-results li[aria-selected="true"] { background: var(--raise); box-shadow: inset 2px 0 0 var(--link); }
+.lookup-ticker { font-family: var(--mono); font-weight: 600; }
+.lookup-name { color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lookup-more { color: var(--ink-3); font-size: 13px; cursor: default; display: block !important; }
+.lookup-msg { margin-top: 8px; min-height: 1.2em; color: var(--review-ink); font-size: 15px; }
+
+.btn { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--line-2); color: var(--ink); text-decoration: none; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.btn:hover { background: var(--raise); }
+.open-tool { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 15px; }
+
+.counts { border: 1px solid var(--line-2); background: var(--panel); padding: 16px; align-self: start; }
+.status-counts { margin: 12px 0 0; }
+.status-counts .row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; padding: 9px 0 9px 12px; border-bottom: 1px solid var(--line); border-left: 6px solid transparent; }
+.status-counts .row:first-child { border-top: 1px solid var(--line); }
+.status-counts dt { font-size: 15px; }
+.status-counts dd { margin: 0; font-family: var(--mono); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.row.st-pass { border-left-color: var(--pass); }
+.row.st-needs_review { border-left-color: var(--review); }
+.row.st-fail { border-left-color: var(--fail); }
+.row.st-insufficient_data { border-left-color: var(--insuf); }
+.counts-total { margin-top: 12px; color: var(--ink-2); font-size: 15px; }
+.counts-load { margin-top: 8px; color: var(--review-ink); font-size: 14px; }
+
+/* status words: colour and word, no pill */
+.st { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+.st-pass { color: var(--pass-ink); }
+.st-needs_review { color: var(--review-ink); }
+.st-fail { color: var(--fail-ink); }
+.st-insufficient_data { color: var(--ink-2); }
+
+.block { padding: 26px 0; border-bottom: 1px solid var(--line); }
+.block > .panel-title { margin-bottom: 12px; }
+.grid { width: 100%; border-collapse: collapse; font-size: 15px; }
+.grid th, .grid td { padding: 9px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.grid thead th { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+.grid tbody th { font-weight: 500; }
+.grid td:first-child { width: 1%; white-space: nowrap; }
+.order { margin-top: 12px; color: var(--ink-2); font-size: 15px; max-width: 80ch; }
+.order a, .foot a { color: var(--link); }
+.limits { margin: 0; padding-left: 20px; font-size: 15px; color: var(--ink); }
+.limits li + li { margin-top: 6px; }
+
+.foot { max-width: 1200px; margin: 0 auto; padding: 22px 16px 28px; }
+.disclaimer { font-size: 15px; color: var(--ink); max-width: 90ch; }
+.meta { margin-top: 10px; font-size: 14px; color: var(--ink-3); }
+.foot a { text-decoration: none; }
+
+/* phones: one column, the notice and the search stay in the first screen */
+@media (max-width: 760px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: 20px; padding-top: 20px; }
+  .hero h1 { font-size: 27px; }
+  .lede { font-size: 16px; }
+  .bar { padding: 8px 12px; }
+  .wordmark { font-size: 20px; }
+  .links a { padding: 6px 6px; font-size: 13px; }
+  .notice { font-size: 14px; padding: 8px 12px; }
+  .grid { font-size: 14px; }
+  .grid th, .grid td { padding: 8px 6px; }
+  .grid td:first-child { width: auto; white-space: normal; }
+  .grid td.num { white-space: nowrap; }
+}

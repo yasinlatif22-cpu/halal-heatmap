@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mirsad: S&amp;P 500 Shariah screen</title>
+  <meta name="description" content="Automated AAOIFI-based Shariah screen of S&amp;P 500 stocks. Not a fatwa and not investment advice.">
+  <meta property="og:title" content="Mirsad: S&amp;P 500 Shariah screen">
+  <meta property="og:description" content="Automated AAOIFI-based Shariah screen of S&amp;P 500 stocks. Not a fatwa and not investment advice.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../fonts.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="bar1">
+      <h1 class="wordmark"><span class="mark-tiles" aria-hidden="true"><i class="s-pass"></i><i class="s-review"></i><i class="s-fail"></i><i class="s-insuf"></i></span><span>Mirsad</span></h1>
+      <div class="cmd" role="search">
+        <span class="prompt" aria-hidden="true">&gt;</span>
+        <label class="visually-hidden" for="q">Ticker or company name</label>
+        <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="TICKER OR COMPANY, E.G. AAPL"
+               role="combobox" aria-expanded="false" aria-controls="q-results" aria-autocomplete="list">
+        <button type="button" id="go" class="go">Go</button>
+        <ul id="q-results" class="results" role="listbox" aria-label="Matching stocks" hidden></ul>
+      </div>
+      <nav class="fn" aria-label="Views">
+        <button type="button" id="fn-map">Map</button>
+        <button type="button" id="fn-list">List</button>
+        <button type="button" id="fn-changes">Changes</button>
+        <a href="?display=1" id="fn-kiosk">Kiosk</a>
+        <button type="button" id="tools-toggle" aria-expanded="false" aria-controls="drawer">Tools</button>
+      </nav>
+    </div>
+    <div class="bar2">
+      <div id="counts" class="counts" aria-label="Status counts, as a filter"></div>
+      <button type="button" id="reset" class="link" hidden>Reset filters</button>
+      <p class="sub" id="subtitle">Loading the latest screen…</p>
+    </div>
+  </header>
+
+  <p id="load-error" class="banner error" hidden role="alert"></p>
+  <div id="banner" class="banner" hidden role="status"></div>
+
+  <main id="app" hidden>
+    <section class="map" aria-label="Map of stocks">
+      <div id="treemap" class="treemap" role="img" aria-label="Treemap of S&amp;P 500 stocks sized by market cap, coloured by status"></div>
+    </section>
+
+    <aside id="drawer" class="drawer" aria-label="Tools and stock detail" inert>
+      <div class="drawer-head">
+        <span class="panel-title">Tools</span>
+        <button type="button" id="drawer-close" class="link">Close</button>
+      </div>
+
+      <form id="controls" class="filters" onsubmit="return false">
+        <div class="field sector-field">
+          <label for="sector">Sector</label>
+          <select id="sector"><option value="all">All sectors</option></select>
+        </div>
+        <fieldset class="group">
+          <legend>Status</legend>
+          <label><input type="checkbox" name="status" value="pass" checked> Pass</label>
+          <label><input type="checkbox" name="status" value="needs_review" checked> Needs review</label>
+          <label><input type="checkbox" name="status" value="fail" checked> Fail</label>
+          <label><input type="checkbox" name="status" value="insufficient_data" checked> Insufficient data</label>
+        </fieldset>
+        <label class="near"><input type="checkbox" id="near-only"> Near a limit only</label>
+        <details class="more">
+          <summary>Basis of interest income and flags</summary>
+          <div class="more-body">
+            <fieldset class="group">
+              <legend>Basis of interest income</legend>
+              <label><input type="checkbox" name="basis" value="disclosed" checked> Disclosed interest (gross)</label>
+              <label><input type="checkbox" name="basis" value="disclosed_partial" checked> Disclosed, summed over segments (partial)</label>
+              <label><input type="checkbox" name="basis" value="annual_fallback" checked> Annual figure (older)</label>
+              <label><input type="checkbox" name="basis" value="net_investment_income" checked> Net investment income</label>
+              <label><input type="checkbox" name="basis" value="upper_bound_cash" checked> Upper bound on cash</label>
+              <label><input type="checkbox" name="basis" value="upper_bound_total_assets" checked> Upper bound on total assets</label>
+              <label><input type="checkbox" name="basis" value="none" checked> No interest income figure</label>
+            </fieldset>
+            <fieldset class="group flags">
+              <legend>Has any of these flags</legend>
+              <label><input type="checkbox" name="flag" value="denominator"> <span class="glyph" aria-hidden="true">≠</span> Denominator-sensitive</label>
+              <label><input type="checkbox" name="flag" value="spot"> <span class="glyph" aria-hidden="true">↕</span> Spot divergence</label>
+              <label><input type="checkbox" name="flag" value="share"> <span class="glyph" aria-hidden="true">#</span> Share count flagged</label>
+              <label><input type="checkbox" name="flag" value="stale"> <span class="glyph" aria-hidden="true">!</span> Balance sheet out of date</label>
+              <label><input type="checkbox" name="flag" value="override"> <span class="glyph" aria-hidden="true">✎</span> Override applied</label>
+            </fieldset>
+          </div>
+        </details>
+        <p id="count" class="count" aria-live="polite"></p>
+      </form>
+
+      <section id="detail" class="panel detail" tabindex="-1" aria-live="polite">
+        <h2 class="panel-title">Stock detail</h2>
+        <p class="empty">Select a stock on the map, search for one above, or open the list.</p>
+      </section>
+
+      <details id="list-wrap" class="panel list" open>
+        <summary class="panel-title">Stock list <span class="count">(<span id="list-count">0</span>)</span></summary>
+        <div class="list-tools">
+          <div class="field">
+            <label for="list-q">Search the list</label>
+            <input id="list-q" type="search" placeholder="Ticker or company name" autocomplete="off">
+          </div>
+          <label class="sort-label">Sort <select id="sort">
+            <option value="watch">Watchlist first, then ticker</option>
+            <option value="ticker">Ticker</option>
+            <option value="status">Status</option>
+            <option value="cap">Market cap</option>
+            <option value="change">Last-close price change</option>
+          </select></label>
+          <button type="button" class="link" id="export-csv">Download CSV</button>
+          <span class="muted note-inline">Pinned tickers stay at the top. Pins are stored in this browser only.</span>
+        </div>
+        <div class="table-scroll">
+          <table class="stock-table">
+            <thead>
+              <tr>
+                <th scope="col"><span class="visually-hidden">Pin</span></th>
+                <th scope="col">Ticker</th>
+                <th scope="col">Company</th>
+                <th scope="col">Status</th>
+                <th scope="col">Near limit</th>
+                <th scope="col">Basis</th>
+                <th scope="col" class="num">Last-close change</th>
+              </tr>
+            </thead>
+            <tbody id="list-body"></tbody>
+          </table>
+        </div>
+      </details>
+
+      <details id="changes-panel" class="panel changes-panel">
+        <summary class="panel-title">Recent status changes</summary>
+        <label class="inline"><input type="checkbox" id="changes-pass-only"> Only changes into or out of pass</label>
+        <ol class="changes" id="changes"></ol>
+        <button type="button" id="changes-more" class="link" hidden></button>
+      </details>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p class="disclaimer" id="disclaimer"></p>
+      <p class="aid">Research aid: not a ruling, not certification, not investment advice. Each stock is screened with one published methodology, set out in the README.</p>
+      <div class="foot-grid">
+      <details class="unsized" id="unsized" hidden>
+        <summary><span id="unsized-count">0</span> stocks have no market cap and are left off the map</summary>
+        <p class="muted">Each is listed with its verdict reason. The map sizes stocks by current market cap, so these cannot be drawn.</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th scope="col">Ticker</th><th scope="col">Company</th><th scope="col">Status</th><th scope="col">Reason</th></tr></thead>
+            <tbody id="unsized-list"></tbody>
+          </table>
+        </div>
+      </details>
+        <div>
+          <h3>Thresholds</h3>
+          <ul id="thresholds"></ul>
+          <p id="near-desc" class="muted"></p>
+        </div>
+        <div>
+          <h3>Market cap method</h3>
+          <p id="mcap-desc"></p>
+        </div>
+        <div>
+          <h3>Data</h3>
+          <p id="data-desc"></p>
+        </div>
+        <div>
+          <h3>Limits</h3>
+          <ul>
+            <li>Constituents come from Wikipedia. Filings come from SEC EDGAR. Prices come from yfinance, an unofficial source.</li>
+            <li>Company names and marks belong to their owners. No affiliation is implied.</li>
+            <li>Marks on tiles: ✓ pass, ? review, ✕ fail, – insufficient. Outline: within the margin of a limit. ! balance sheet out of date. Other marks are in the detail panel.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <div class="status" id="status-line" role="status">
+    <span class="live">Live export</span>
+    <span>As of <b id="status-asof">—</b></span>
+    <span class="src">Source <b>SEC EDGAR · Wikipedia · yfinance (unofficial)</b></span>
+    <span class="hover" id="status-hover"></span>
+    <span class="clock" id="status-clock"></span>
+  </div>
+
+  <script src="../vendor/plotly.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

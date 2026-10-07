@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.5"]
+dev = ["pytest>=8", "ruff>=0.5", "playwright>=1.40"]
 
 [project.scripts]
 halal-heatmap = "halal_heatmap.cli:main"

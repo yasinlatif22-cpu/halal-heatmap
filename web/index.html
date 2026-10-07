@@ -3,152 +3,271 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Halal Heatmap: S&amp;P 500 Shariah screen</title>
-  <meta name="description" content="Automated AAOIFI-based Shariah screen of S&amp;P 500 stocks. Not a fatwa and not investment advice.">
-  <link rel="stylesheet" href="style.css">
+  <title>Mirsad: an auditable Shariah screen of the S&amp;P 500</title>
+  <meta name="description" content="A heatmap of S&amp;P 500 companies under an AAOIFI-based screen, with the inputs behind each verdict open to check. An automated research aid, not a fatwa, certification or investment advice.">
+  <meta property="og:title" content="Mirsad: an auditable Shariah screen of the S&amp;P 500">
+  <meta property="og:description" content="A heatmap of S&amp;P 500 companies under an AAOIFI-based screen, with the inputs behind each verdict open to check. An automated research aid, not a fatwa, certification or investment advice.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="landing.css">
 </head>
 <body>
   <header class="top">
-    <div class="wrap">
-      <h1>Halal Heatmap</h1>
-      <p class="sub" id="subtitle">Loading the latest screen…</p>
-      <details class="unsized" id="unsized" hidden>
-        <summary><span id="unsized-count">0</span> stocks have no market cap and are left off the map</summary>
-        <p class="muted">Each is listed with its verdict reason. The map sizes stocks by current market cap, so these cannot be drawn.</p>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th scope="col">Ticker</th><th scope="col">Company</th><th scope="col">Status</th><th scope="col">Reason</th></tr></thead>
-            <tbody id="unsized-list"></tbody>
-          </table>
-        </div>
-      </details>
+    <div class="bar">
+      <a class="wordmark" href="./"><span class="mark-tiles" aria-hidden="true"><i class="s-pass"></i><i class="s-review"></i><i class="s-fail"></i><i class="s-insuf"></i></span><span>Mirsad</span></a>
+      <nav class="links" aria-label="Main">
+        <a href="tool/">Tool</a>
+        <a href="#method">Method</a>
+        <a href="https://github.com/yasinlatif22-cpu/halal-heatmap#readme">README</a>
+      </nav>
     </div>
   </header>
 
-  <div class="wrap">
-    <div id="banner" class="banner" hidden role="status"></div>
-    <p id="load-error" class="banner error" hidden role="alert"></p>
-  </div>
+  <p class="notice" role="note">
+    <b>An automated screen, not a fatwa or a certification.</b> The thresholds have not yet been verified against the AAOIFI primary text (Shari'ah Standard No. 21). A research aid, not investment advice.
+  </p>
 
-  <main class="wrap layout" id="app" hidden>
-    <section class="map" aria-labelledby="map-heading">
-      <h2 id="map-heading" class="visually-hidden">Map of stocks</h2>
+  <main>
+    <section class="hero" aria-labelledby="hero-h">
+      <div class="hero-main">
+        <h1 id="hero-h">Which S&amp;P 500 companies pass the screen, and why</h1>
+        <p class="lede">An AAOIFI-based screen of every S&amp;P 500 company, run automatically. Each verdict keeps the ratios, their limits and the filing behind it, so it can be checked.</p>
 
-      <form class="controls" id="controls" onsubmit="return false">
-        <div class="field search">
-          <label for="q">Find a stock</label>
-          <input id="q" type="search" placeholder="Ticker or company name" autocomplete="off">
-        </div>
+        <form class="lookup" id="lookup" role="search">
+          <label for="lookup-q">Find a stock</label>
+          <div class="lookup-row">
+            <span class="prompt" aria-hidden="true">&gt;</span>
+            <input id="lookup-q" name="q" type="text" autocomplete="off" spellcheck="false" role="combobox"
+                   aria-expanded="false" aria-controls="lookup-results" aria-autocomplete="list"
+                   placeholder="TICKER OR NAME, E.G. AAPL">
+            <button type="submit" class="go">Open</button>
+          </div>
+          <ul class="lookup-results" id="lookup-results" role="listbox" aria-label="Matching stocks" hidden></ul>
+          <p class="lookup-msg" id="lookup-msg" role="status"></p>
+        </form>
 
-        <fieldset class="group">
-          <legend>Colour tiles by</legend>
-          <label><input type="radio" name="colour" value="status" checked> Status</label>
-          <label id="colour-change-label"><input type="radio" name="colour" value="change" id="colour-change"> Last-close price change</label>
-        </fieldset>
+        <p class="open-tool"><a class="btn" href="tool/">Open the heatmap</a> <span class="muted">every stock, coloured by status</span></p>
+      </div>
 
-        <fieldset class="group">
-          <legend>Status</legend>
-          <label><input type="checkbox" name="status" value="pass" checked> Pass</label>
-          <label><input type="checkbox" name="status" value="needs_review" checked> Needs review</label>
-          <label><input type="checkbox" name="status" value="fail" checked> Fail</label>
-          <label><input type="checkbox" name="status" value="insufficient_data" checked> Insufficient data</label>
-        </fieldset>
-
-        <fieldset class="group">
-          <legend>Near a limit</legend>
-          <label><input type="checkbox" id="near-only"> Only stocks within the margin of a limit <span class="mark" aria-hidden="true">◆</span></label>
-        </fieldset>
-
-        <fieldset class="group">
-          <legend>Basis of interest income</legend>
-          <label><input type="checkbox" name="basis" value="disclosed" checked> Disclosed interest (gross)</label>
-          <label><input type="checkbox" name="basis" value="disclosed_partial" checked> Disclosed, summed over segments (partial) <span class="glyph" aria-hidden="true">○</span></label>
-          <label><input type="checkbox" name="basis" value="annual_fallback" checked> Annual figure (older) <span class="glyph" aria-hidden="true">○</span></label>
-          <label><input type="checkbox" name="basis" value="net_investment_income" checked> Net investment income <span class="glyph" aria-hidden="true">○</span></label>
-          <label><input type="checkbox" name="basis" value="upper_bound_cash" checked> Upper bound on cash <span class="glyph" aria-hidden="true">○</span></label>
-          <label><input type="checkbox" name="basis" value="upper_bound_total_assets" checked> Upper bound on total assets <span class="glyph" aria-hidden="true">○</span></label>
-          <label><input type="checkbox" name="basis" value="none" checked> No interest income figure</label>
-        </fieldset>
-
-        <fieldset class="group flags">
-          <legend>Has any of these flags</legend>
-          <label><input type="checkbox" name="flag" value="denominator"> <span class="glyph" aria-hidden="true">≠</span> Denominator-sensitive</label>
-          <label><input type="checkbox" name="flag" value="spot"> <span class="glyph" aria-hidden="true">↕</span> Spot divergence</label>
-          <label><input type="checkbox" name="flag" value="share"> <span class="glyph" aria-hidden="true">#</span> Share count flagged</label>
-          <label><input type="checkbox" name="flag" value="stale"> <span class="glyph" aria-hidden="true">!</span> Balance sheet out of date</label>
-          <label><input type="checkbox" name="flag" value="override"> <span class="glyph" aria-hidden="true">✎</span> Override applied</label>
-        </fieldset>
-
-        <div class="actions">
-          <p id="count" class="count" aria-live="polite"></p>
-          <button type="button" id="reset" class="link">Reset filters</button>
-        </div>
-      </form>
-
-      <div class="legend" id="legend" aria-label="Legend"></div>
-
-      <div id="treemap" class="treemap" role="img" aria-label="Treemap of S&amp;P 500 stocks sized by market cap"></div>
-      <p class="note">Tiles are sized by current market cap and grouped by sector. Tap or click a tile for its audit record. On a small screen, use the list below.</p>
-
-      <details class="list" id="list-wrap">
-        <summary>All stocks as a list (<span id="list-count">0</span>)</summary>
-        <div class="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Ticker</th>
-                <th scope="col">Company</th>
-                <th scope="col">Status</th>
-                <th scope="col">Near a limit</th>
-                <th scope="col">Basis</th>
-                <th scope="col">Last-close price change</th>
-              </tr>
-            </thead>
-            <tbody id="list-body"></tbody>
-          </table>
-        </div>
-      </details>
+      <aside class="counts" aria-labelledby="counts-h">
+        <h2 id="counts-h" class="panel-title">Latest screen</h2>
+        <dl class="status-counts">
+          <div class="row st-pass"><dt>Pass</dt><dd id="n-pass">n/a</dd></div>
+          <div class="row st-needs_review"><dt>Needs review</dt><dd id="n-needs_review">n/a</dd></div>
+          <div class="row st-fail"><dt>Fail</dt><dd id="n-fail">n/a</dd></div>
+          <div class="row st-insufficient_data"><dt>Insufficient data</dt><dd id="n-insufficient_data">n/a</dd></div>
+        </dl>
+        <p class="counts-total"><span id="n-total">n/a</span> stocks, screened as of <span id="as-of">n/a</span></p>
+        <p class="counts-load" id="counts-load" role="status"></p>
+      </aside>
     </section>
 
-    <aside class="side" aria-label="Stock detail and recent changes">
-      <section class="panel" id="detail" tabindex="-1">
-        <h2>Stock detail</h2>
-        <p class="muted">Select a stock on the map or in the list to see its full audit record.</p>
-      </section>
+    <section class="block" id="verdict" aria-labelledby="verdict-h">
+      <h2 id="verdict-h" class="panel-title">How a verdict is made</h2>
+      <table class="grid">
+        <thead><tr><th scope="col">Status</th><th scope="col">Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><span class="st st-pass">Pass</span></td><td>Every input was available and every ratio is within its limit.</td></tr>
+          <tr><td><span class="st st-fail">Fail</span></td><td>A business screen failed, or a financial ratio is over its limit.</td></tr>
+          <tr><td><span class="st st-needs_review">Needs review</span></td><td>A borderline business case. It is never passed automatically. A reviewer may resolve it with a recorded override.</td></tr>
+          <tr><td><span class="st st-insufficient_data">Insufficient data</span></td><td>A required input is missing or out of date. It is never treated as a pass.</td></tr>
+        </tbody>
+      </table>
+      <p class="order">The checks run in this order, and the first that applies decides: a business fail, then missing or out-of-date input, then a ratio over its limit, then a borderline business case. Otherwise the result is a pass. A few checks can turn a pass into insufficient data; none changes a fail or a review.</p>
+    </section>
 
-      <section class="panel" id="changes-panel">
-        <h2>Recent status changes</h2>
-        <label class="inline"><input type="checkbox" id="changes-pass-only"> Only changes into or out of pass</label>
-        <ol class="changes" id="changes"></ol>
-        <p id="changes-more-wrap"><button type="button" id="changes-more" class="link" hidden></button></p>
-      </section>
-    </aside>
+    <section class="block" id="method" aria-labelledby="method-h">
+      <h2 id="method-h" class="panel-title">The method in brief</h2>
+      <table class="grid">
+        <thead><tr><th scope="col">Test</th><th scope="col">Limit</th><th scope="col">Rule</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Interest-bearing debt / market cap</th><td class="num">below 30%</td><td>Strict "&lt;". Debt from the widest set of tags that does not double count.</td></tr>
+          <tr><th scope="row">Cash and interest-bearing securities / market cap</th><td class="num">below 30%</td><td>Strict "&lt;". Same rule as debt.</td></tr>
+          <tr><th scope="row">Impure income / revenue</th><td class="num">below 5%</td><td>Strict "&lt;". Interest income only.</td></tr>
+          <tr><th scope="row">Business screen</th><td>fail</td><td>Alcohol, tobacco, gambling, conventional banks and insurers, and weapons makers. Some borderline groups go to needs review.</td></tr>
+          <tr><th scope="row">Market cap</th><td>12-month average</td><td>Verdicts use the 12-month average of daily market cap. Spot and the 36-month average are stored and compared.</td></tr>
+          <tr><th scope="row">Near a limit</th><td>within 10%</td><td>A passing ratio within 10% of its limit, measured relative to the limit, is flagged.</td></tr>
+        </tbody>
+      </table>
+      <p class="order">Filings are read only if they were filed on or before the screen date, and the screen date's own price is never read. Stored history only moves forward. The full method, and the points still to verify, are in the <a href="https://github.com/yasinlatif22-cpu/halal-heatmap#readme">README</a>.</p>
+    </section>
+
+    <section class="block" id="sources" aria-labelledby="sources-h">
+      <h2 id="sources-h" class="panel-title">Data sources</h2>
+      <table class="grid">
+        <thead><tr><th scope="col">Source</th><th scope="col">Used for</th><th scope="col">Note</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Wikipedia: list of S&amp;P 500 companies</th><td>Which companies are screened, with sector and sub-industry</td><td>Today's list, not the list on a past date.</td></tr>
+          <tr><th scope="row">SEC EDGAR: company facts and each filing's XBRL</th><td>Debt, cash, revenue, interest income and share counts</td><td>Point in time: only filings made by the screen date.</td></tr>
+          <tr><th scope="row">yfinance</th><td>Closing prices for market cap and the last-close price change</td><td>Unofficial. It can break or be throttled. A run that cannot read every close is not published.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="block" id="limits" aria-labelledby="limits-h">
+      <h2 id="limits-h" class="panel-title">Limits</h2>
+      <ul class="limits">
+        <li>Most companies do not tag interest income. Other bases are labelled lower confidence on the page.</li>
+        <li>The business screen cannot see revenue mix inside a harmless industry code.</li>
+        <li>There is no historical backtest. The constituent list and industry codes are today's values.</li>
+        <li>The thresholds and the business rules are the project's own reading. They are not yet checked against the AAOIFI text.</li>
+      </ul>
+      <p class="order">The full list is in the <a href="https://github.com/yasinlatif22-cpu/halal-heatmap#readme">README</a>.</p>
+    </section>
   </main>
 
   <footer class="foot">
-    <div class="wrap">
-      <p class="disclaimer" id="disclaimer"></p>
-      <div class="foot-grid">
-        <div>
-          <h3>Thresholds</h3>
-          <ul id="thresholds"></ul>
-          <p id="near-desc" class="muted"></p>
-        </div>
-        <div>
-          <h3>Market cap method</h3>
-          <p id="mcap-desc"></p>
-        </div>
-        <div>
-          <h3>Data</h3>
-          <p id="data-desc"></p>
-        </div>
-      </div>
-    </div>
+    <p class="disclaimer">Mirsad is an automated research aid. It is not a fatwa, not a religious ruling, not a certification and not investment advice. Consult a qualified scholar before relying on any result, and read the audit record for any company you care about.</p>
+    <p class="meta" id="foot-meta">Data: loading the export.</p>
+    <p class="meta"><a href="tool/">Tool</a> · <a href="https://github.com/yasinlatif22-cpu/halal-heatmap">Source code</a> · Company names and marks belong to their owners. No affiliation is implied.</p>
   </footer>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.3/plotly.min.js"
-    integrity="sha384-MqL7Cy3itNqCI1Wlc926K0XhyRKJ/NMqTaytIIEB+QIdInOploxqRIHRKLlhPykM"
-    crossorigin="anonymous"></script>
-  <script src="app.js"></script>
+  <script>
+    // Old links of the form index.html#TICKER go to the tool. Only ticker-shaped hashes: section links such as #method stay here.
+    (function () {
+      var ticker = decodeURIComponent(location.hash.slice(1));
+      if (/^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker)) { location.replace('tool/#' + encodeURIComponent(ticker)); }
+    })();
+  </script>
+  <script>
+    // Counts and dates come from data/meta.json, which is small. Stocks are searched with data/ticker_index.json.
+    // data/screens.json is not read on this page.
+    (function () {
+      var STATUSES = ['pass', 'needs_review', 'fail', 'insufficient_data'];
+      function text(id, value) { document.getElementById(id).textContent = value; }
+      fetch('data/meta.json', { cache: 'no-cache' })
+        .then(function (response) { if (!response.ok) throw new Error(String(response.status)); return response.json(); })
+        .then(function (meta) {
+          var by = meta.counts.by_status || {};
+          STATUSES.forEach(function (key) { text('n-' + key, String(by[key] || 0)); });
+          text('n-total', String(meta.counts.stocks));
+          text('as-of', meta.screen_date);
+          text('foot-meta', 'Screened as of ' + meta.screen_date +
+            '. Constituents as of ' + (meta.constituents_as_of || 'n/a') +
+            '. Monthly screen cycle began ' + (meta.cycle_start || 'n/a') +
+            '. Methodology ' + meta.config_hash + '. Export generated ' + (meta.generated_at || 'n/a') + '.');
+        })
+        .catch(function () {
+          text('counts-load', 'The counts could not be loaded. The export may not be published yet.');
+          text('foot-meta', 'Data: not available.');
+        });
+    })();
+  </script>
+  <script>
+    // Ticker search. It uses data/ticker_index.json, written by the export. Typing lists the matches. Submitting opens a
+    // single match; with two or more, the reader picks one (arrow keys or a click). If the index is missing, the search
+    // opens tool/#TICKER with the text typed, and the tool resolves it.
+    (function () {
+      var form = document.getElementById('lookup');
+      var input = document.getElementById('lookup-q');
+      var list = document.getElementById('lookup-results');
+      var message = document.getElementById('lookup-msg');
+      var index = null;
+      var matches = [];
+      var active = -1;
+      var picked = false;
+      var SHOW = 20;
+      fetch('data/ticker_index.json', { cache: 'no-cache' })
+        .then(function (response) { if (!response.ok) throw new Error(String(response.status)); return response.json(); })
+        .then(function (data) { index = data.stocks; })
+        .catch(function () { index = null; });
+      // Share-class tickers match with or without the dot or hyphen: BRKB, BRK-B and BRK.B all find BRK.B.
+      function norm(value) { return String(value).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+      // Exact ticker first, then ticker prefix, then company name. Each stock appears once.
+      function findAll(query) {
+        var key = norm(query);
+        var needle = query.trim().toLowerCase();
+        var seen = {};
+        var out = [];
+        function add(hits) { hits.forEach(function (s) { if (!seen[s.ticker]) { seen[s.ticker] = true; out.push(s); } }); }
+        if (!key && !needle) return out;
+        add(index.filter(function (s) { return norm(s.ticker) === key; }));
+        add(index.filter(function (s) { return key && norm(s.ticker).indexOf(key) === 0; }));
+        add(index.filter(function (s) { return needle && s.name.toLowerCase().indexOf(needle) !== -1; }));
+        return out;
+      }
+      function go(stock) { location.href = 'tool/#' + encodeURIComponent(stock.ticker); }
+      function hideList() {
+        list.hidden = true;
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+      }
+      function paint() {
+        list.innerHTML = '';
+        matches.slice(0, SHOW).forEach(function (stock, i) {
+          var item = document.createElement('li');
+          item.id = 'lookup-opt-' + i;
+          item.setAttribute('role', 'option');
+          item.setAttribute('aria-selected', String(i === active));
+          var ticker = document.createElement('span');
+          ticker.className = 'lookup-ticker';
+          ticker.textContent = stock.ticker;
+          var name = document.createElement('span');
+          name.className = 'lookup-name';
+          name.textContent = stock.name;
+          item.appendChild(ticker);
+          item.appendChild(name);
+          item.addEventListener('mousedown', function (event) { event.preventDefault(); go(stock); });
+          list.appendChild(item);
+        });
+        if (matches.length > SHOW) {
+          var more = document.createElement('li');
+          more.className = 'lookup-more';
+          more.textContent = (matches.length - SHOW) + ' more: type more of the ticker or name to narrow the list';
+          list.appendChild(more);
+        }
+        list.hidden = false;
+        input.setAttribute('aria-expanded', 'true');
+        input.setAttribute('aria-activedescendant', active >= 0 ? 'lookup-opt-' + active : '');
+      }
+      // Typing only lists the matches. Nothing opens until the reader submits or picks one.
+      function typed() {
+        var query = input.value.trim();
+        picked = false;
+        message.textContent = '';
+        matches = index && query ? findAll(query) : [];
+        if (!matches.length) { active = -1; hideList(); return; }
+        active = 0;
+        paint();
+      }
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        var query = input.value.trim();
+        message.textContent = '';
+        if (!query) return;
+        if (!index) { location.href = 'tool/#' + encodeURIComponent(query); return; }
+        matches = findAll(query);
+        if (matches.length === 1) { go(matches[0]); return; }
+        if (matches.length === 0) {
+          hideList();
+          message.textContent = 'No S&P 500 stock matches "' + query + '".';
+          return;
+        }
+        if (picked && active >= 0) { go(matches[active]); return; }
+        active = 0;
+        paint();
+      });
+      input.addEventListener('input', typed);
+      input.addEventListener('keydown', function (event) {
+        if (list.hidden || !matches.length) return;
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          var step = event.key === 'ArrowDown' ? 1 : -1;
+          var shown = Math.min(matches.length, SHOW);
+          active = (active + step + shown) % shown;
+          picked = true;
+          paint();
+        } else if (event.key === 'Enter' && picked && active >= 0 && matches[active]) {
+          event.preventDefault();
+          go(matches[active]);
+        } else if (event.key === 'Escape') {
+          hideList();
+        }
+      });
+      input.addEventListener('blur', function () { setTimeout(hideList, 150); });
+    })();
+  </script>
 </body>
 </html>

@@ -1,4 +1,7 @@
-# Halal Heatmap
+# Mirsad
+
+The product is named Mirsad in user-facing text. The repo slug, the Python package, the CLI, the data branch, the workflow
+names, SEC_USER_AGENT and the watchlist storage key are deliberately still halal-heatmap, to be renamed later in a separate step.
 
 A static web tool: a treemap of S&P 500 stocks coloured by the result of an AAOIFI-based Shariah
 screen, with status changes flagged, updated automatically. This file is the working spec and the
