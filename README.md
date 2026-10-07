@@ -1,6 +1,6 @@
-# Halal Heatmap
+# Mirsad
 
-A static page showing every S&P 500 stock coloured by the result of an AAOIFI-based Shariah screen,
+Mirsad is a static page showing every S&P 500 stock coloured by the result of an AAOIFI-based Shariah screen,
 with status changes recorded and flagged. The screen is updated automatically from SEC filings and
 daily prices, and every verdict keeps the trail needed to check it.
 
@@ -197,7 +197,7 @@ export SEC_USER_AGENT="halal-heatmap/0.1 (you@example.com)"
 .venv/bin/halal-heatmap update                        # what the schedule runs
 .venv/bin/halal-heatmap changes [TICKER] [--since D]  # status changes and index events
 .venv/bin/halal-heatmap export --no-prices            # site data, without the last-close price change
-python3 -m http.server 8000 --directory web           # then open http://localhost:8000
+python3 -m http.server 8000 --directory web           # landing page at http://localhost:8000, the tool at http://localhost:8000/tool/
 ```
 
 `data/*.db` and `.cache/` are not tracked. The first `update` builds the database from scratch and
