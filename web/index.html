@@ -4,287 +4,161 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mirsad: an auditable Shariah screen of the S&amp;P 500</title>
+  <meta name="description" content="A heatmap of S&amp;P 500 companies under an AAOIFI-based screen, with the inputs behind each verdict open to check. An automated research aid, not a fatwa, certification or investment advice.">
   <meta property="og:title" content="Mirsad: an auditable Shariah screen of the S&amp;P 500">
   <meta property="og:description" content="A heatmap of S&amp;P 500 companies under an AAOIFI-based screen, with the inputs behind each verdict open to check. An automated research aid, not a fatwa, certification or investment advice.">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
-  <meta name="description" content="A heatmap of S&amp;P 500 companies under an AAOIFI-based screen, with the inputs behind each verdict open to check. An automated research aid, not a fatwa, certification or investment advice.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="landing.css">
 </head>
 <body>
-  <header class="site-head">
-    <div class="wrap nav">
-      <a class="brand" href="./"><span class="mark" aria-hidden="true"><i class="s-pass"></i><i class="s-review"></i><i class="s-fail"></i><i class="s-insuf"></i></span><span>Mirsad</span></a>
-      <nav aria-label="Main">
-        <a href="tool/" class="nav-main">Heatmap</a>
-        <a href="#read" class="nav-secondary">How to read it</a>
-        <a href="#method" class="nav-secondary">Method and data</a>
-        <a href="#disclaimer" class="nav-secondary">What this is not</a>
+  <header class="top">
+    <div class="bar">
+      <a class="wordmark" href="./"><span class="mark-tiles" aria-hidden="true"><i class="s-pass"></i><i class="s-review"></i><i class="s-fail"></i><i class="s-insuf"></i></span><span>Mirsad</span></a>
+      <nav class="links" aria-label="Main">
+        <a href="tool/">Tool</a>
+        <a href="#method">Method</a>
+        <a href="https://github.com/yasinlatif22-cpu/halal-heatmap#readme">README</a>
       </nav>
     </div>
   </header>
 
+  <p class="notice" role="note">
+    <b>An automated screen, not a fatwa or a certification.</b> The thresholds have not yet been verified against the AAOIFI primary text (Shari'ah Standard No. 21). A research aid, not investment advice.
+  </p>
+
   <main>
-    <section class="hero wrap">
-      <div class="hero-head">
-        <h1>Which S&amp;P 500 companies pass, and why</h1>
-        <p class="lede">An AAOIFI-based screen of every S&amp;P 500 company, with the inputs behind each verdict open to check.</p>
-        <div class="ctas">
-          <a class="btn primary" href="tool/">Open the heatmap</a>
-          <a class="btn secondary" href="#verdict">How a verdict is made</a>
-        </div>
+    <section class="hero" aria-labelledby="hero-h">
+      <div class="hero-main">
+        <h1 id="hero-h">Which S&amp;P 500 companies pass the screen, and why</h1>
+        <p class="lede">An AAOIFI-based screen of every S&amp;P 500 company, run automatically. Each verdict keeps the ratios, their limits and the filing behind it, so it can be checked.</p>
+
         <form class="lookup" id="lookup" role="search">
           <label for="lookup-q">Find a stock</label>
           <div class="lookup-row">
+            <span class="prompt" aria-hidden="true">&gt;</span>
             <input id="lookup-q" name="q" type="text" autocomplete="off" spellcheck="false" role="combobox"
                    aria-expanded="false" aria-controls="lookup-results" aria-autocomplete="list"
-                   placeholder="Ticker or company, e.g. AAPL or BRK.B">
-            <button type="submit" class="btn primary">Open</button>
+                   placeholder="TICKER OR NAME, E.G. AAPL">
+            <button type="submit" class="go">Open</button>
           </div>
           <ul class="lookup-results" id="lookup-results" role="listbox" aria-label="Matching stocks" hidden></ul>
           <p class="lookup-msg" id="lookup-msg" role="status"></p>
         </form>
+
+        <p class="open-tool"><a class="btn" href="tool/">Open the heatmap</a> <span class="muted">every stock, coloured by status</span></p>
       </div>
-      <div class="hero-preview">
-        <div class="status-counts" id="status-counts" hidden>
-          <div class="status-bar" id="status-bar" role="img" aria-label="Number of companies in each status"></div>
-          <p class="status-text" id="status-text"></p>
-        </div>
-        <iframe class="preview" src="tool/?display=1&amp;embed=1" loading="lazy"
-                title="Live heatmap of the S&amp;P 500, coloured by status. Hover a tile for its status; click one to open it in the full tool."></iframe>
-        <p class="preview-note">Screen dated <span id="fact-screen-cap">the latest screen</span>. Hover a tile for its status. Click a tile to open it in the full tool.</p>
-      </div>
+
+      <aside class="counts" aria-labelledby="counts-h">
+        <h2 id="counts-h" class="panel-title">Latest screen</h2>
+        <dl class="status-counts">
+          <div class="row st-pass"><dt>Pass</dt><dd id="n-pass">n/a</dd></div>
+          <div class="row st-needs_review"><dt>Needs review</dt><dd id="n-needs_review">n/a</dd></div>
+          <div class="row st-fail"><dt>Fail</dt><dd id="n-fail">n/a</dd></div>
+          <div class="row st-insufficient_data"><dt>Insufficient data</dt><dd id="n-insufficient_data">n/a</dd></div>
+        </dl>
+        <p class="counts-total"><span id="n-total">n/a</span> stocks, screened as of <span id="as-of">n/a</span></p>
+        <p class="counts-load" id="counts-load" role="status"></p>
+      </aside>
     </section>
 
-    <section id="problem" class="problem wrap" aria-labelledby="problem-h">
-      <h2 id="problem-h">A screen you can check, not a ruling you have to trust</h2>
-      <p>Many people want to know whether a listed company's business and finances fit a Shariah screen, and why. This tool applies one published method to public SEC filings and market prices. For every verdict it keeps the ratios, their limits, the filing used and the data it could not read, so the result can be checked. It does not issue rulings.</p>
-    </section>
-
-    <section id="verdict" class="statuses wrap" aria-labelledby="verdict-h">
-      <h2 id="verdict-h">How a verdict is made</h2>
-      <dl class="status-list">
-        <div>
-          <dt><span class="pill st-pass">Pass</span></dt>
-          <dd>Every input was available and every ratio is within its limit.</dd>
-        </div>
-        <div>
-          <dt><span class="pill st-fail">Fail</span></dt>
-          <dd>A business screen failed, or a financial ratio is over its limit.</dd>
-        </div>
-        <div>
-          <dt><span class="pill st-review">Needs review</span></dt>
-          <dd>A borderline business case. It is never passed automatically. A reviewer may resolve it with a recorded override.</dd>
-        </div>
-        <div>
-          <dt><span class="pill st-insufficient">Insufficient data</span></dt>
-          <dd>A required input is missing or out of date. It is never treated as a pass.</dd>
-        </div>
-      </dl>
-      <p class="order-h">The checks run in this order, and the first one that applies decides:</p>
-      <ol class="steps">
-        <li>The business screen fails: <b>fail</b>.</li>
-        <li>A required input is missing or out of date: <b>insufficient data</b>.</li>
-        <li>A financial ratio is over its limit: <b>fail</b>.</li>
-        <li>The business case is borderline: <b>needs review</b>.</li>
-        <li>Otherwise: <b>pass</b>.</li>
-      </ol>
-      <p class="order">Some checks can turn a pass into insufficient data. None of them changes a fail or a review.</p>
-    </section>
-
-    <section id="read" class="read wrap" aria-labelledby="read-h">
-      <h2 id="read-h">How to read a tile</h2>
-      <ul class="read-list">
-        <li><b>Size</b> is spot market cap: the latest close times the reported share count.</li>
-        <li><b>Colour</b> is the status. The tool can also colour tiles by the last-close price change, which is shown only when the export includes prices. Green and red mean the price moved up or down, and gray means it barely moved.</li>
-        <li><b>Outline or hatching</b> marks a pass or a review within 10% of a limit, measured relative to the limit.</li>
-        <li><b>!</b> marks a balance sheet that is out of date. Lower-confidence interest bases and the other flags are listed in the audit record.</li>
-        <li><b>Click a tile</b> for its audit record: each ratio with its limit and headroom, the filing used, and the XBRL facts behind it.</li>
-      </ul>
-    </section>
-
-    <section id="example" class="example wrap" aria-labelledby="example-h">
-      <h2 id="example-h">A worked example: Apple (AAPL)</h2>
-      <p class="example-verdict" id="ex-verdict">Loading the example from the export.</p>
-      <table class="example-table">
-        <thead><tr><th scope="col">Ratio</th><th scope="col">Value</th><th scope="col">Limit</th><th scope="col">Result</th></tr></thead>
-        <tbody id="ex-rows"></tbody>
+    <section class="block" id="verdict" aria-labelledby="verdict-h">
+      <h2 id="verdict-h" class="panel-title">How a verdict is made</h2>
+      <table class="grid">
+        <thead><tr><th scope="col">Status</th><th scope="col">Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><span class="st st-pass">Pass</span></td><td>Every input was available and every ratio is within its limit.</td></tr>
+          <tr><td><span class="st st-fail">Fail</span></td><td>A business screen failed, or a financial ratio is over its limit.</td></tr>
+          <tr><td><span class="st st-needs_review">Needs review</span></td><td>A borderline business case. It is never passed automatically. A reviewer may resolve it with a recorded override.</td></tr>
+          <tr><td><span class="st st-insufficient_data">Insufficient data</span></td><td>A required input is missing or out of date. It is never treated as a pass.</td></tr>
+        </tbody>
       </table>
-      <p class="example-note" id="ex-basis"></p>
-      <p class="example-note" id="ex-filing"></p>
-      <p class="note">These figures are read from the published export for the screen dated in the freshness section below. They are not recalculated on this page.</p>
+      <p class="order">The checks run in this order, and the first that applies decides: a business fail, then missing or out-of-date input, then a ratio over its limit, then a borderline business case. Otherwise the result is a pass. A few checks can turn a pass into insufficient data; none changes a fail or a review.</p>
     </section>
 
-    <section id="method" class="method wrap" aria-labelledby="method-h">
-      <h2 id="method-h">Method and data</h2>
-      <div class="method-grid">
-        <div>
-          <h3>Thresholds</h3>
-          <table class="thresholds">
-            <thead><tr><th scope="col">Ratio</th><th scope="col">Limit</th></tr></thead>
-            <tbody>
-              <tr><th scope="row">Interest-bearing debt / market cap</th><td>below 30%</td></tr>
-              <tr><th scope="row">Cash and interest-bearing securities / market cap</th><td>below 30%</td></tr>
-              <tr><th scope="row">Impure income (interest) / revenue</th><td>below 5%</td></tr>
-            </tbody>
-          </table>
-          <p class="note">These limits come from secondary summaries of AAOIFI Shari'ah Standard No. 21. They have not yet been checked against the AAOIFI text itself. The business rules and the market cap method are the project's own reading.</p>
-        </div>
-        <div>
-          <h3>Data sources</h3>
-          <ul class="sources">
-            <li><b>Constituents:</b> the Wikipedia list of S&amp;P 500 companies.</li>
-            <li><b>Filings and financial facts:</b> SEC EDGAR, its company facts, and each filing's own XBRL.</li>
-            <li><b>Prices:</b> yfinance. It is an unofficial source and can be throttled or break. A run that cannot read every close is not published.</li>
-          </ul>
-          <h3>Point in time</h3>
-          <p>A verdict for a date uses only filings filed on or before that date, and only closing prices from before it.</p>
-        </div>
-      </div>
-      <p class="more-info">The full method, its known limitations and the open items are in the <a href="https://github.com/yasinlatif22-cpu/halal-heatmap#readme">README</a>.</p>
+    <section class="block" id="method" aria-labelledby="method-h">
+      <h2 id="method-h" class="panel-title">The method in brief</h2>
+      <table class="grid">
+        <thead><tr><th scope="col">Test</th><th scope="col">Limit</th><th scope="col">Rule</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Interest-bearing debt / market cap</th><td class="num">below 30%</td><td>Strict "&lt;". Debt from the widest set of tags that does not double count.</td></tr>
+          <tr><th scope="row">Cash and interest-bearing securities / market cap</th><td class="num">below 30%</td><td>Strict "&lt;". Same rule as debt.</td></tr>
+          <tr><th scope="row">Impure income / revenue</th><td class="num">below 5%</td><td>Strict "&lt;". Interest income only.</td></tr>
+          <tr><th scope="row">Business screen</th><td>fail</td><td>Alcohol, tobacco, gambling, conventional banks and insurers, and weapons makers. Some borderline groups go to needs review.</td></tr>
+          <tr><th scope="row">Market cap</th><td>12-month average</td><td>Verdicts use the 12-month average of daily market cap. Spot and the 36-month average are stored and compared.</td></tr>
+          <tr><th scope="row">Near a limit</th><td>within 10%</td><td>A passing ratio within 10% of its limit, measured relative to the limit, is flagged.</td></tr>
+        </tbody>
+      </table>
+      <p class="order">Filings are read only if they were filed on or before the screen date, and the screen date's own price is never read. Stored history only moves forward. The full method, and the points still to verify, are in the <a href="https://github.com/yasinlatif22-cpu/halal-heatmap#readme">README</a>.</p>
     </section>
 
-    <section id="now" class="now wrap" aria-labelledby="now-h">
-      <h2 id="now-h">How current it is</h2>
-      <dl class="facts">
-        <div><dt>Latest screen</dt><dd id="fact-screen">Loading</dd></div>
-        <div><dt>Constituent list</dt><dd id="fact-constituents">Loading</dd></div>
-        <div><dt>Companies on the map</dt><dd id="fact-count">Loading</dd></div>
-      </dl>
-      <p>A scheduled run screens the companies that are due on weekdays after the US close, with extra runs in the earnings months. Every company is screened again at the start of each month. The site is redeployed only when a run stores new results, so the latest screen date above is the most recent one that reached the page.</p>
+    <section class="block" id="sources" aria-labelledby="sources-h">
+      <h2 id="sources-h" class="panel-title">Data sources</h2>
+      <table class="grid">
+        <thead><tr><th scope="col">Source</th><th scope="col">Used for</th><th scope="col">Note</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Wikipedia: list of S&amp;P 500 companies</th><td>Which companies are screened, with sector and sub-industry</td><td>Today's list, not the list on a past date.</td></tr>
+          <tr><th scope="row">SEC EDGAR: company facts and each filing's XBRL</th><td>Debt, cash, revenue, interest income and share counts</td><td>Point in time: only filings made by the screen date.</td></tr>
+          <tr><th scope="row">yfinance</th><td>Closing prices for market cap and the last-close price change</td><td>Unofficial. It can break or be throttled. A run that cannot read every close is not published.</td></tr>
+        </tbody>
+      </table>
     </section>
 
-    <section id="faq" class="faq wrap" aria-labelledby="faq-h">
-      <h2 id="faq-h">Questions</h2>
-      <details>
-        <summary>Is this a ruling?</summary>
-        <p>No. It applies published thresholds to public data and records how it reached each verdict. A ruling needs a qualified scholar, and this page does not replace one.</p>
-      </details>
-      <details>
-        <summary>Have the thresholds been checked against the AAOIFI text?</summary>
-        <p>Not yet. They come from secondary summaries of AAOIFI Shari'ah Standard No. 21. The README lists the items still open.</p>
-      </details>
-      <details>
-        <summary>Why does a company show insufficient data?</summary>
-        <p>A required input is missing, or the balance sheet is out of date. That status is never treated as a pass.</p>
-      </details>
-      <details>
-        <summary>What does a review override do?</summary>
-        <p>A reviewer can resolve a needs-review case, with a recorded reason and date. The override expires after 365 days. It never changes a fail, and it never changes a pass.</p>
-      </details>
-      <details>
-        <summary>How is market cap measured?</summary>
-        <p>Closing price times reported shares. Verdicts use the 12-month average of daily market cap, and the spot value is shown alongside it.</p>
-      </details>
-      <details>
-        <summary>Why are some price changes missing?</summary>
-        <p>Prices come from yfinance, an unofficial source. The daily change is shown only when every company's closes could be read, so a partial set is never published.</p>
-      </details>
-      <details>
-        <summary>Can I use this for investment decisions?</summary>
-        <p>No. This is not investment advice. A pass says nothing about whether a company is a good investment.</p>
-      </details>
-    </section>
-
-    <section id="disclaimer" class="disclaimer wrap" aria-labelledby="disclaimer-h">
-      <h2 id="disclaimer-h">What this is not</h2>
-      <p>This is an automated screening and research aid. It is not a religious ruling (fatwa), not a certification that any company is permissible, and not investment advice.</p>
-      <p>The data can be late, incomplete or wrong. Consult a qualified scholar before relying on any result, and read the audit record for any company you care about.</p>
+    <section class="block" id="limits" aria-labelledby="limits-h">
+      <h2 id="limits-h" class="panel-title">Limits</h2>
+      <ul class="limits">
+        <li>Most companies do not tag interest income. Other bases are labelled lower confidence on the page.</li>
+        <li>The business screen cannot see revenue mix inside a harmless industry code.</li>
+        <li>There is no historical backtest. The constituent list and industry codes are today's values.</li>
+        <li>The thresholds and the business rules are the project's own reading. They are not yet checked against the AAOIFI text.</li>
+      </ul>
+      <p class="order">The full list is in the <a href="https://github.com/yasinlatif22-cpu/halal-heatmap#readme">README</a>.</p>
     </section>
   </main>
 
-  <footer class="site-foot">
-    <div class="wrap">
-      <p>Source code and the full README: <a href="https://github.com/yasinlatif22-cpu/halal-heatmap">the repository</a>.</p>
-      <p>Last generated: <span id="fact-generated">loading</span>.</p>
-    </div>
+  <footer class="foot">
+    <p class="disclaimer">Mirsad is an automated research aid. It is not a fatwa, not a religious ruling, not a certification and not investment advice. Consult a qualified scholar before relying on any result, and read the audit record for any company you care about.</p>
+    <p class="meta" id="foot-meta">Data: loading the export.</p>
+    <p class="meta"><a href="tool/">Tool</a> · <a href="https://github.com/yasinlatif22-cpu/halal-heatmap">Source code</a> · Company names and marks belong to their owners. No affiliation is implied.</p>
   </footer>
 
   <script>
+    // Old links of the form index.html#TICKER go to the tool. Only ticker-shaped hashes: section links such as #method stay here.
     (function () {
-      // Old links to /#TICKER were written for the tool at the site root. Send them to the tool.
       var ticker = decodeURIComponent(location.hash.slice(1));
-      if (/^[A-Za-z0-9.-]{1,10}$/.test(ticker)) { location.replace('tool/#' + encodeURIComponent(ticker)); return; }
-      function show(id, text) { document.getElementById(id).textContent = text; }
-      function pct(v, d) { return (v * 100).toFixed(d == null ? 2 : d) + '%'; }
-
-      fetch('data/meta.json')
-        .then(function (r) { if (!r.ok) throw new Error('meta ' + r.status); return r.json(); })
-        .then(function (m) {
-          show('fact-screen', m.screen_date || 'not recorded');
-          show('fact-constituents', m.constituents_as_of || 'not recorded');
-          show('fact-count', m.counts && m.counts.stocks != null ? m.counts.stocks + ' companies' : 'not recorded');
-          show('fact-generated', m.generated_at ? new Date(m.generated_at).toUTCString() : 'not recorded');
-          show('fact-screen-cap', m.screen_date || 'the latest screen');
-          var byStatus = m.counts && m.counts.by_status;
-          if (byStatus) {
-            var order = [
-              ['pass', 'pass', 'st-pass'],
-              ['needs_review', 'needs review', 'st-review'],
-              ['fail', 'fail', 'st-fail'],
-              ['insufficient_data', 'insufficient data', 'st-insufficient'],
-            ];
-            var total = order.reduce(function (n, o) { return n + (byStatus[o[0]] || 0); }, 0);
-            var bar = document.getElementById('status-bar');
-            var text = [];
-            order.forEach(function (o) {
-              var n = byStatus[o[0]] || 0;
-              var seg = document.createElement('span');
-              seg.className = 'seg ' + o[2];
-              seg.style.flexGrow = String(n);
-              bar.appendChild(seg);
-              text.push(n + ' ' + o[1]);
-            });
-            show('status-text', text.join(' · ') + '. ' + total + ' companies in all.');
-            document.getElementById('status-counts').hidden = false;
-          }
+      if (/^[A-Z][A-Z0-9.-]{0,9}$/.test(ticker)) { location.replace('tool/#' + encodeURIComponent(ticker)); }
+    })();
+  </script>
+  <script>
+    // Counts and dates come from data/meta.json, which is small. Stocks are searched with data/ticker_index.json.
+    // data/screens.json is not read on this page.
+    (function () {
+      var STATUSES = ['pass', 'needs_review', 'fail', 'insufficient_data'];
+      function text(id, value) { document.getElementById(id).textContent = value; }
+      fetch('data/meta.json', { cache: 'no-cache' })
+        .then(function (response) { if (!response.ok) throw new Error(String(response.status)); return response.json(); })
+        .then(function (meta) {
+          var by = meta.counts.by_status || {};
+          STATUSES.forEach(function (key) { text('n-' + key, String(by[key] || 0)); });
+          text('n-total', String(meta.counts.stocks));
+          text('as-of', meta.screen_date);
+          text('foot-meta', 'Screened as of ' + meta.screen_date +
+            '. Constituents as of ' + (meta.constituents_as_of || 'n/a') +
+            '. Monthly screen cycle began ' + (meta.cycle_start || 'n/a') +
+            '. Methodology ' + meta.config_hash + '. Export generated ' + (meta.generated_at || 'n/a') + '.');
         })
         .catch(function () {
-          ['fact-screen', 'fact-constituents', 'fact-count', 'fact-generated'].forEach(function (id) {
-            show(id, 'unavailable right now');
-          });
-        });
-
-      fetch('data/screens.json')
-        .then(function (r) { if (!r.ok) throw new Error('screens ' + r.status); return r.json(); })
-        .then(function (data) {
-          var rows = data.screens || data;
-          var a = rows.filter(function (s) { return s.ticker === 'AAPL'; })[0];
-          if (!a) throw new Error('AAPL missing');
-          var labels = { debt: 'Interest-bearing debt / market cap', cash: 'Cash and interest-bearing securities / market cap', impure_income: 'Impure income (interest) / revenue' };
-          var statusText = { pass: 'Pass', fail: 'Fail', needs_review: 'Needs review', insufficient_data: 'Insufficient data' };
-          show('ex-verdict', (statusText[a.status] || a.status) + ' on the screen dated ' + a.screen_date + '. Reason: ' + a.reason + '.');
-          var tbody = document.getElementById('ex-rows');
-          ['debt', 'cash', 'impure_income'].forEach(function (key) {
-            var r = a.ratios[key];
-            var tr = document.createElement('tr');
-            [labels[key], pct(r.ratio), r.operator + ' ' + pct(r.limit, 0), r.passed ? 'Within limit' : 'Over limit'].forEach(function (text, i) {
-              var cell = document.createElement(i === 0 ? 'th' : 'td');
-              if (i === 0) cell.scope = 'row';
-              cell.textContent = text;
-              tr.appendChild(cell);
-            });
-            tbody.appendChild(tr);
-          });
-          var basis = a.interest_income || {};
-          var basisText = basis.key === 'upper_bound_cash'
-            ? 'No interest income is disclosed for Apple, so impure income is an upper bound from cash and securities. That basis is lower confidence and can only support a pass.'
-            : 'Interest-income basis: ' + (basis.key || 'not recorded') + (basis.confidence === 'lower' ? ' (lower confidence).' : '.');
-          show('ex-basis', basisText);
-          var f = a.filing || {};
-          show('ex-filing', 'Balance sheet from the ' + (f.form || 'filing') + ' filed ' + (f.filed || 'n/a') + ', for the period ending ' + (f.period_end || 'n/a') + '.');
-        })
-        .catch(function () {
-          show('ex-verdict', 'The example could not be loaded right now. The heatmap shows every company.');
+          text('counts-load', 'The counts could not be loaded. The export may not be published yet.');
+          text('foot-meta', 'Data: not available.');
         });
     })();
   </script>
   <script>
-    // Ticker search from the landing page. It uses data/ticker_index.json, written by the export. Typing lists the
-    // matches. Submitting opens a single match; with two or more, the reader picks one (arrow keys or a click). If the
-    // index is missing, the search opens tool/#TICKER with the text typed, and the tool resolves it.
+    // Ticker search. It uses data/ticker_index.json, written by the export. Typing lists the matches. Submitting opens a
+    // single match; with two or more, the reader picks one (arrow keys or a click). If the index is missing, the search
+    // opens tool/#TICKER with the text typed, and the tool resolves it.
     (function () {
       var form = document.getElementById('lookup');
       var input = document.getElementById('lookup-q');
@@ -300,7 +174,7 @@
         .then(function (data) { index = data.stocks; })
         .catch(function () { index = null; });
       // Share-class tickers match with or without the dot or hyphen: BRKB, BRK-B and BRK.B all find BRK.B.
-      function norm(text) { return String(text).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+      function norm(value) { return String(value).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
       // Exact ticker first, then ticker prefix, then company name. Each stock appears once.
       function findAll(query) {
         var key = norm(query);

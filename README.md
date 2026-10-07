@@ -24,9 +24,9 @@ Each stock has one of four statuses:
 They are decided in this order: business fail, then missing input, then a financial ratio fail, then
 business needs_review, then pass. Pass-only checks (below) can turn a pass into `insufficient_data`.
 
-Tiles are sized by spot market cap. Two colourings are offered: status, and the last-close price change.
-The last-close price change is the move between the two closes before the screen date, and it is only offered
-when the export includes price data.
+Tiles are sized by spot market cap and coloured by status only. The last-close price change, the move
+between the two closes before the screen date, is shown in the stock detail and the list, and only when the
+export includes price data.
 
 ## Methodology
 

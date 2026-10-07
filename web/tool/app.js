@@ -23,12 +23,10 @@
   const TILE_GAP = '#0a0b0d';                       // the seam between tiles: the page colour
   const PARENT_INK = '#c4c9d0';
   const UNSIZED = '#3a404a';
-  // URL flags: ?display=1 is the kiosk view, ?embed=1 the landing page's preview (removed with the preview).
+  // URL flag: ?display=1 is the kiosk view.
   const PARAMS = new URLSearchParams(location.search);
   const DISPLAY = PARAMS.get('display') === '1';
-  const EMBED = PARAMS.get('embed') === '1';
   if (DISPLAY) document.documentElement.classList.add('kiosk');
-  if (EMBED) document.documentElement.classList.add('embed');
   // A move smaller than this reads as flat. It is a display threshold; the scale and the data are unchanged.
   const FLAT = 0.0005;
   const STALE_DAYS = 4;                // export older than this shows a warning in the banner
@@ -317,11 +315,6 @@
         // click then opens its stock. Plotly applies its own drill-down after this handler returns, so reset on the next tick.
         setTimeout(() => Plotly.restyle(el.treemap, { level: 'all' }), 0);
         if (DISPLAY || !byTicker.has(id)) return;
-        // In the landing page's preview, a tile opens that company in the full tool.
-        if (EMBED && window.top !== window.self) {
-          window.top.location.href = new URL(`./#${encodeURIComponent(id)}`, location.href).href;
-          return;
-        }
         openDetail(id);
       });
       el.treemap.on('plotly_hover', (ev) => {

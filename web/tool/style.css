@@ -103,7 +103,8 @@ button { cursor: pointer; }
 
 /* ---------- map and drawer ---------- */
 
-main#app { position: relative; height: calc(100dvh - var(--chrome)); min-height: 420px; overflow: hidden; }
+/* clip, not hidden: a hidden container can still be scrolled by focus or scrollIntoView, which would move the map */
+main#app { position: relative; height: calc(100dvh - var(--chrome)); min-height: 420px; overflow: hidden; overflow: clip; }
 .map { position: relative; height: 100%; }
 .treemap { width: 100%; height: 100%; }
 
@@ -294,6 +295,3 @@ th { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacin
   .kiosk .bar1, .kiosk .bar2 { height: auto; }
 }
 
-/* the landing page's live preview: the map only, without the page chrome */
-.embed .top, .embed .foot, .embed .status, .embed .drawer { display: none !important; }
-.embed main#app { height: 100dvh; min-height: 0; }

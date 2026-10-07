@@ -1,5 +1,5 @@
-"""The tool's copy and wiring: the ownership note, the price change named for what it measures, the kiosk and embed
-views, the stale warning, and no third-party requests. The tool is dark only, so there is no light theme to test."""
+"""The tool's copy and wiring: the ownership note, the price change named for what it measures, the kiosk view,
+the stale warning, and no third-party requests. The tool is dark only, so there is no light theme to test."""
 
 from pathlib import Path
 
@@ -42,7 +42,6 @@ def test_the_tools_start_hidden_and_the_kiosk_is_the_map_only():
     js = (TOOL / "app.js").read_text()
     assert '<aside id="drawer"' in html and " inert>" in html
     assert "get('display') === '1'" in js
-    assert "get('embed') === '1'" in js
     assert ".kiosk .drawer" in (TOOL / "style.css").read_text()
 
 

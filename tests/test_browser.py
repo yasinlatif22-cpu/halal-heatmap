@@ -7,6 +7,7 @@ is missing, or when the export has not been generated, so CI (which has none of 
 
 import functools
 import http.server
+import json
 import socketserver
 import threading
 from pathlib import Path
@@ -347,3 +348,59 @@ def test_landing_search_escape_closes_the_list(site, page):
     page.wait_for_selector("#lookup-results li[role='option']")
     page.press("#lookup-q", "Escape")
     assert not page.is_visible("#lookup-results")
+
+
+def _record_hosts(page):
+    hosts, urls = set(), []
+
+    def record(request):
+        hosts.add(urlparse(request.url).hostname)
+        urls.append(request.url)
+
+    page.on("request", record)
+    return hosts, urls
+
+
+def test_landing_counts_come_from_meta_and_never_from_screens(site, page):
+    hosts, urls = _record_hosts(page)
+    page.goto(f"{site}/")
+    page.wait_for_function("document.getElementById('as-of').textContent !== 'n/a'")
+    meta = json.loads((WEB / "data" / "meta.json").read_text(encoding="utf-8"))
+    for status in ("pass", "needs_review", "fail", "insufficient_data"):
+        shown = page.text_content(f"#n-{status}")
+        assert shown == str(meta["counts"]["by_status"].get(status, 0)), status
+    assert page.text_content("#as-of") == meta["screen_date"]
+    assert not any(u.endswith("screens.json") for u in urls), "the landing page must not fetch screens.json"
+    assert hosts == {"127.0.0.1"}, hosts
+
+
+def test_landing_loads_its_own_fonts(site, page):
+    page.goto(f"{site}/")
+    page.wait_for_timeout(500)
+    loaded = page.evaluate("""async () => { await document.fonts.ready;
+        return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family); }""")
+    assert "Mirsad Condensed" in loaded and "Mirsad Mono" in loaded, loaded
+
+
+@pytest.mark.parametrize("width,height", [(375, 812), (390, 844)])
+def test_the_notice_is_visible_without_scrolling_on_a_phone(site, page, width, height):
+    page.set_viewport_size({"width": width, "height": height})
+    page.goto(f"{site}/")
+    box = page.locator(".notice").bounding_box()
+    assert box and box["y"] >= 0 and box["y"] + box["height"] <= height, box
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    page.set_viewport_size({"width": 1440, "height": 900})
+
+
+@pytest.mark.parametrize("path", ["/#method", "/#verdict", "/#sources"])
+def test_section_links_stay_on_the_landing_page(site, page, path):
+    page.goto("about:blank")  # a real load: a hash change alone does not run the page's scripts again
+    page.goto(f"{site}{path}")
+    page.wait_for_timeout(300)
+    assert "/tool/" not in page.url
+
+
+def test_an_old_ticker_hash_on_the_landing_page_goes_to_the_tool(site, page):
+    page.goto("about:blank")
+    page.goto(f"{site}/#BRK.B")
+    page.wait_for_url("**/tool/#BRK.B")
