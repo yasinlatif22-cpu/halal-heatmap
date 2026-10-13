@@ -200,6 +200,7 @@ def test_choosing_a_sector_writes_the_url_and_All_clears_it(site, page):
 
 def test_list_search_narrows_the_list_within_a_sector(site, page):
     _open(page, f"{site}/tool/?sector=Financials", whole=False)
+    page.click("#fn-list")
     page.fill("#list-q", "JPM")
     page.wait_for_function("document.getElementById('count').textContent.includes('Showing')")
     assert page.text_content("#list-count") == "1"
@@ -253,7 +254,7 @@ def test_the_tool_loads_its_own_fonts_and_nothing_from_a_third_party(site, page)
             return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family); }""")
     finally:
         page.remove_listener("request", record)
-    assert "Mirsad Mono" in loaded and "Mirsad Condensed" in loaded
+    assert "Mirsad Mono" in loaded
     assert hosts == {"127.0.0.1"}, hosts
 
 
@@ -393,7 +394,7 @@ def test_landing_loads_its_own_fonts(site, page):
     page.wait_for_timeout(500)
     loaded = page.evaluate("""async () => { await document.fonts.ready;
         return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family); }""")
-    assert "Mirsad Condensed" in loaded and "Mirsad Mono" in loaded, loaded
+    assert "Mirsad Mono" in loaded, loaded
 
 
 @pytest.mark.parametrize("width,height", [(375, 812), (390, 844)])
@@ -418,3 +419,63 @@ def test_an_old_ticker_hash_on_the_landing_page_goes_to_the_tool(site, page):
     page.goto("about:blank")
     page.goto(f"{site}/#BRK.B")
     page.wait_for_url("**/tool/#BRK.B")
+
+
+def test_workspace_navigation_shows_only_the_requested_content(site, page):
+    _open(page, f"{site}/tool/")
+    before = page.locator("#treemap").bounding_box()
+    for button, mode, visible in (
+        ("#tools-toggle", "filters", "#controls"),
+        ("#fn-list", "list", "#list-wrap"),
+        ("#fn-changes", "changes", "#changes-panel"),
+    ):
+        page.click(button)
+        assert page.get_attribute("#drawer", "data-mode") == mode
+        assert page.is_visible(visible)
+        for section in ("#controls", "#detail", "#list-wrap", "#changes-panel"):
+            if section != visible:
+                assert page.is_hidden(section), section
+        active = button if mode in ("list", "changes") else "#fn-map"
+        assert page.get_attribute(active, "aria-current") == "page"
+        for navigation in ("#fn-map", "#fn-list", "#fn-changes"):
+            if navigation != active:
+                assert page.get_attribute(navigation, "aria-current") is None
+        assert page.locator("#treemap").bounding_box() == before
+    page.click("#fn-map")
+    assert not _drawer_open(page)
+    assert page.get_attribute("#fn-map", "aria-current") == "page"
+
+
+def test_stock_detail_is_exclusive_and_close_restores_keyboard_focus(site, page):
+    _open(page, f"{site}/tool/#AAPL")
+    assert page.get_attribute("#drawer", "data-mode") == "detail"
+    assert page.is_visible("#detail")
+    for section in ("#controls", "#list-wrap", "#changes-panel"):
+        assert page.is_hidden(section)
+    page.press("#detail", "Escape")
+    assert not _drawer_open(page)
+    assert page.evaluate("document.activeElement.id") == "tools-toggle"
+    page.click("#fn-list")
+    assert page.input_value("#list-q") == ""
+    page.click('#list-body .stock[data-ticker="AAPL"]')
+    assert page.get_attribute("#drawer", "data-mode") == "detail"
+    assert "AAPL" in page.text_content("#detail h2")
+    page.click("#drawer-close")
+    assert page.evaluate("document.activeElement.id") == "tools-toggle"
+
+
+@pytest.mark.parametrize("width,height", [(375, 812), (390, 844)])
+def test_mobile_workspaces_fit_the_viewport(site, page, width, height):
+    page.set_viewport_size({"width": width, "height": height})
+    try:
+        _open(page, f"{site}/tool/")
+        for button in ("#tools-toggle", "#fn-list", "#fn-changes"):
+            page.click(button)
+            assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+            page.wait_for_timeout(250)  # allow the panel's transform to finish
+            box = page.locator("#drawer").bounding_box()
+            assert box and box["x"] >= -1 and box["x"] + box["width"] <= width + 1, box
+        page.click("#drawer-close")
+        assert page.evaluate("document.activeElement.id") == "tools-toggle"
+    finally:
+        page.set_viewport_size({"width": 1440, "height": 900})

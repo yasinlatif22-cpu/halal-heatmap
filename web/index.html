@@ -14,13 +14,14 @@
   <link rel="stylesheet" href="landing.css">
 </head>
 <body>
+  <a class="skip-link" href="#hero-h">Skip to research overview</a>
   <header class="top">
     <div class="bar">
-      <a class="wordmark" href="./"><span class="mark-tiles" aria-hidden="true"><i class="s-pass"></i><i class="s-review"></i><i class="s-fail"></i><i class="s-insuf"></i></span><span>Mirsad</span></a>
+      <a class="wordmark" href="./"><span class="brand-mark" aria-hidden="true">M</span><span>Mirsad</span><span class="brand-caption">Equity research</span></a>
       <nav class="links" aria-label="Main">
-        <a href="tool/">Tool</a>
-        <a href="#method">Method</a>
-        <a href="https://github.com/yasinlatif22-cpu/halal-heatmap#readme">README</a>
+        <a href="tool/">Explore the market</a>
+        <a href="#method">Methodology</a>
+        <a href="#sources">Data sources</a>
       </nav>
     </div>
   </header>
@@ -32,44 +33,46 @@
   <main>
     <section class="hero" aria-labelledby="hero-h">
       <div class="hero-main">
-        <h1 id="hero-h">Which S&amp;P 500 companies pass the screen, and why</h1>
-        <p class="lede">An AAOIFI-based screen of every S&amp;P 500 company, run automatically. Each verdict keeps the ratios, their limits and the filing behind it, so it can be checked.</p>
+        <p class="eyebrow">Independent screening research / S&amp;P 500</p>
+        <h1 id="hero-h">A clearer view of Shariah screening.</h1>
+        <p class="lede">Explore an automated AAOIFI-based screen of the S&amp;P 500. Follow each result back to its financial ratios, methodology and source filing.</p>
 
         <form class="lookup" id="lookup" role="search">
           <label for="lookup-q">Find a stock</label>
           <div class="lookup-row">
-            <span class="prompt" aria-hidden="true">&gt;</span>
+            <span class="prompt" aria-hidden="true">⌕</span>
             <input id="lookup-q" name="q" type="text" autocomplete="off" spellcheck="false" role="combobox"
                    aria-expanded="false" aria-controls="lookup-results" aria-autocomplete="list"
-                   placeholder="TICKER OR NAME, E.G. AAPL">
-            <button type="submit" class="go">Open</button>
+                   placeholder="Company or ticker, e.g. AAPL">
+            <button type="submit" class="go">View stock</button>
           </div>
           <ul class="lookup-results" id="lookup-results" role="listbox" aria-label="Matching stocks" hidden></ul>
           <p class="lookup-msg" id="lookup-msg" role="status"></p>
         </form>
 
-        <p class="open-tool"><a class="btn" href="tool/">Open the heatmap</a> <span class="muted">every stock, coloured by status</span></p>
+        <p class="open-tool"><a class="btn" href="tool/">Open the heatmap</a> <span class="muted">The full market, with the evidence behind it.</span></p>
       </div>
 
       <aside class="counts" aria-labelledby="counts-h">
-        <h2 id="counts-h" class="panel-title">Latest screen</h2>
+        <div class="snapshot-heading"><h2 id="counts-h" class="panel-title">Screening overview</h2><span class="snapshot-source">Latest published screen</span></div>
+        <p class="snapshot-summary"><span id="n-total">n/a</span><span class="snapshot-label">screened records<br>in the published dataset</span></p>
         <dl class="status-counts">
           <div class="row st-pass"><dt>Pass</dt><dd id="n-pass">n/a</dd></div>
           <div class="row st-needs_review"><dt>Needs review</dt><dd id="n-needs_review">n/a</dd></div>
           <div class="row st-fail"><dt>Fail</dt><dd id="n-fail">n/a</dd></div>
           <div class="row st-insufficient_data"><dt>Insufficient data</dt><dd id="n-insufficient_data">n/a</dd></div>
         </dl>
-        <p class="counts-total"><span id="n-total">n/a</span> stocks, screened as of <span id="as-of">n/a</span></p>
+        <p class="counts-total">Screen date <span id="as-of">n/a</span></p>
         <p class="counts-load" id="counts-load" role="status"></p>
       </aside>
     </section>
 
     <section class="block" id="verdict" aria-labelledby="verdict-h">
-      <h2 id="verdict-h" class="panel-title">How a verdict is made</h2>
+      <div class="section-heading"><p class="section-index">01 / Interpretation</p><h2 id="verdict-h" class="panel-title">Read the result, then the evidence.</h2></div>
       <table class="grid">
         <thead><tr><th scope="col">Status</th><th scope="col">Meaning</th></tr></thead>
         <tbody>
-          <tr><td><span class="st st-pass">Pass</span></td><td>Every input was available and every ratio is within its limit.</td></tr>
+          <tr><td><span class="st st-pass">Pass</span></td><td>The business and financial checks passed using the disclosed inputs or a labelled conservative bound.</td></tr>
           <tr><td><span class="st st-fail">Fail</span></td><td>A business screen failed, or a financial ratio is over its limit.</td></tr>
           <tr><td><span class="st st-needs_review">Needs review</span></td><td>A borderline business case. It is never passed automatically. A reviewer may resolve it with a recorded override.</td></tr>
           <tr><td><span class="st st-insufficient_data">Insufficient data</span></td><td>A required input is missing or out of date. It is never treated as a pass.</td></tr>
@@ -79,7 +82,7 @@
     </section>
 
     <section class="block" id="method" aria-labelledby="method-h">
-      <h2 id="method-h" class="panel-title">The method in brief</h2>
+      <div class="section-heading"><p class="section-index">02 / Methodology</p><h2 id="method-h" class="panel-title">The rules behind the screen.</h2></div>
       <table class="grid">
         <thead><tr><th scope="col">Test</th><th scope="col">Limit</th><th scope="col">Rule</th></tr></thead>
         <tbody>
@@ -95,7 +98,7 @@
     </section>
 
     <section class="block" id="sources" aria-labelledby="sources-h">
-      <h2 id="sources-h" class="panel-title">Data sources</h2>
+      <div class="section-heading"><p class="section-index">03 / Provenance</p><h2 id="sources-h" class="panel-title">Public data. Traceable inputs.</h2></div>
       <table class="grid">
         <thead><tr><th scope="col">Source</th><th scope="col">Used for</th><th scope="col">Note</th></tr></thead>
         <tbody>
@@ -107,9 +110,9 @@
     </section>
 
     <section class="block" id="limits" aria-labelledby="limits-h">
-      <h2 id="limits-h" class="panel-title">Limits</h2>
+      <div class="section-heading"><p class="section-index">04 / Research limitations</p><h2 id="limits-h" class="panel-title">Know what the data can tell you.</h2></div>
       <ul class="limits">
-        <li>Most companies do not tag interest income. Other bases are labelled lower confidence on the page.</li>
+        <li>Many companies do not tag interest income. Estimates based on upper bounds are marked lower confidence; annual, net and partial figures are labelled separately.</li>
         <li>The business screen cannot see revenue mix inside a harmless industry code.</li>
         <li>There is no historical backtest. The constituent list and industry codes are today's values.</li>
         <li>The thresholds and the business rules are the project's own reading. They are not yet checked against the AAOIFI text.</li>
