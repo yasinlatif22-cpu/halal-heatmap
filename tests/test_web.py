@@ -109,11 +109,11 @@ async function check(mode, expected) {
   const nodes = new Map();
   const get = (id) => {
     if (!nodes.has(id)) nodes.set(id, {
-      hidden: true, value: '', checked: false, textContent: '', innerHTML: '', offsetHeight: 30,
+      dataset: {}, hidden: true, value: '', checked: false, textContent: '', innerHTML: '', offsetHeight: 30,
       handlers: {}, classList: { add() {}, toggle() {}, contains() { return false; } },
       addEventListener(event, handler) { this.handlers[event] = handler; },
       setAttribute() {}, removeAttribute() {}, querySelectorAll() { return []; },
-      on() {},
+      on() {}, contains() { return false; }, focus() {},
     });
     return nodes.get(id);
   };

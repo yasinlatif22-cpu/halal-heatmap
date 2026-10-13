@@ -42,7 +42,9 @@ def test_no_em_dashes_or_en_dashes_in_the_copy():
 def test_the_landing_uses_the_mirsad_fonts_and_loads_no_other_host():
     assert '<link rel="stylesheet" href="fonts.css">' in LANDING
     css = (WEB / "landing.css").read_text()
-    assert "Mirsad Mono" in css and "Mirsad Condensed" in css
+    assert "Mirsad Mono" in css
+    assert "Segoe UI" in css and "sans-serif" in css
+    assert "Mirsad Condensed" not in css
     assert "IBM Plex" not in css and "IBM Plex" not in LANDING
     for text in (LANDING, css):
         assert "googleapis" not in text and "gstatic" not in text and "cdn" not in text.lower()

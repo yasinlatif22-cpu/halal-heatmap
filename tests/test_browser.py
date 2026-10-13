@@ -52,13 +52,12 @@ def page():
 def _open(page, url, whole=True):
     page.goto(url)
     page.wait_for_selector("#treemap .slicetext")
-    # Plotly can render duplicate text nodes for patterns. Count distinct labels and
-    # wait for every label in the loaded trace, independent of the export's size.
+    # On narrow screens Plotly deliberately suppresses small labels. Verify that
+    # every node has a rendered surface rather than requiring every label to be visible.
     page.wait_for_function("""() => {
         const chart = document.getElementById('treemap');
-        const labels = chart.data?.[0]?.labels;
-        const rendered = new Set([...chart.querySelectorAll('.slicetext')].map(el => el.textContent));
-        return labels?.length > 0 && labels.every(label => rendered.has(label)) && rendered.size === labels.length;
+        const ids = chart.data?.[0]?.ids;
+        return ids?.length > 0 && chart.querySelectorAll('g.slice > path.surface').length === ids.length;
     }""")
     if not whole:
         page.wait_for_function("document.getElementById('count').textContent.length > 0")
@@ -105,25 +104,39 @@ def test_tools_are_hidden_by_default_and_the_map_does_not_move(site, page):
     assert page.locator("#treemap").bounding_box() == before
 
 
+def _track_drilldown_animation(page):
+    page.evaluate("""() => {
+        window.drilldownFrames = [];
+        document.getElementById('treemap').on('plotly_animatingframe', event => {
+            window.drilldownFrames.push(event.name ?? 'frame');
+        });
+    }""")
+
+
 def test_leaf_click_opens_the_stock_and_keeps_the_whole_map(site, page):
     _open(page, f"{site}/tool/")
     whole_map_labels = _trace_labels(page)
     point = _point(page, "NVDA")
+    _track_drilldown_animation(page)
     page.mouse.click(point["x"], point["y"])
     page.wait_for_function("document.querySelector('#detail h2')?.textContent.includes('NVDA')")
     page.wait_for_function("""expected => new Set([...document.querySelectorAll('#treemap .slicetext')]
         .map(el => el.textContent)).size === expected""", arg=whole_map_labels)
     assert _labels(page) == whole_map_labels
     assert _drawer_open(page)
+    page.wait_for_timeout(300)
+    assert page.evaluate("window.drilldownFrames") == []
 
 
 def test_sector_click_keeps_the_sector_view_fixed_to_the_whole_map(site, page):
     _open(page, f"{site}/tool/")
     whole_map_labels = _trace_labels(page)
     point = _point(page, "Information Technology", sector=True)
+    _track_drilldown_animation(page)
     page.mouse.click(point["x"], point["y"])
     page.wait_for_timeout(300)
     assert _labels(page) == whole_map_labels
+    assert page.evaluate("window.drilldownFrames") == []
 
 
 def test_hover_names_the_company_on_the_status_line(site, page):
@@ -200,6 +213,7 @@ def test_choosing_a_sector_writes_the_url_and_All_clears_it(site, page):
 
 def test_list_search_narrows_the_list_within_a_sector(site, page):
     _open(page, f"{site}/tool/?sector=Financials", whole=False)
+    page.click("#fn-list")
     page.fill("#list-q", "JPM")
     page.wait_for_function("document.getElementById('count').textContent.includes('Showing')")
     assert page.text_content("#list-count") == "1"
@@ -253,7 +267,7 @@ def test_the_tool_loads_its_own_fonts_and_nothing_from_a_third_party(site, page)
             return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family); }""")
     finally:
         page.remove_listener("request", record)
-    assert "Mirsad Mono" in loaded and "Mirsad Condensed" in loaded
+    assert "Mirsad Mono" in loaded
     assert hosts == {"127.0.0.1"}, hosts
 
 
@@ -393,7 +407,7 @@ def test_landing_loads_its_own_fonts(site, page):
     page.wait_for_timeout(500)
     loaded = page.evaluate("""async () => { await document.fonts.ready;
         return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family); }""")
-    assert "Mirsad Condensed" in loaded and "Mirsad Mono" in loaded, loaded
+    assert "Mirsad Mono" in loaded, loaded
 
 
 @pytest.mark.parametrize("width,height", [(375, 812), (390, 844)])
@@ -418,3 +432,63 @@ def test_an_old_ticker_hash_on_the_landing_page_goes_to_the_tool(site, page):
     page.goto("about:blank")
     page.goto(f"{site}/#BRK.B")
     page.wait_for_url("**/tool/#BRK.B")
+
+
+def test_workspace_navigation_shows_only_the_requested_content(site, page):
+    _open(page, f"{site}/tool/")
+    before = page.locator("#treemap").bounding_box()
+    for button, mode, visible in (
+        ("#tools-toggle", "filters", "#controls"),
+        ("#fn-list", "list", "#list-wrap"),
+        ("#fn-changes", "changes", "#changes-panel"),
+    ):
+        page.click(button)
+        assert page.get_attribute("#drawer", "data-mode") == mode
+        assert page.is_visible(visible)
+        for section in ("#controls", "#detail", "#list-wrap", "#changes-panel"):
+            if section != visible:
+                assert page.is_hidden(section), section
+        active = button if mode in ("list", "changes") else "#fn-map"
+        assert page.get_attribute(active, "aria-current") == "page"
+        for navigation in ("#fn-map", "#fn-list", "#fn-changes"):
+            if navigation != active:
+                assert page.get_attribute(navigation, "aria-current") is None
+        assert page.locator("#treemap").bounding_box() == before
+    page.click("#fn-map")
+    assert not _drawer_open(page)
+    assert page.get_attribute("#fn-map", "aria-current") == "page"
+
+
+def test_stock_detail_is_exclusive_and_close_restores_keyboard_focus(site, page):
+    _open(page, f"{site}/tool/#AAPL")
+    assert page.get_attribute("#drawer", "data-mode") == "detail"
+    assert page.is_visible("#detail")
+    for section in ("#controls", "#list-wrap", "#changes-panel"):
+        assert page.is_hidden(section)
+    page.press("#detail", "Escape")
+    assert not _drawer_open(page)
+    assert page.evaluate("document.activeElement.id") == "tools-toggle"
+    page.click("#fn-list")
+    assert page.input_value("#list-q") == ""
+    page.click('#list-body .stock[data-ticker="AAPL"]')
+    assert page.get_attribute("#drawer", "data-mode") == "detail"
+    assert "AAPL" in page.text_content("#detail h2")
+    page.click("#drawer-close")
+    assert page.evaluate("document.activeElement.id") == "tools-toggle"
+
+
+@pytest.mark.parametrize("width,height", [(375, 812), (390, 844)])
+def test_mobile_workspaces_fit_the_viewport(site, page, width, height):
+    page.set_viewport_size({"width": width, "height": height})
+    try:
+        _open(page, f"{site}/tool/")
+        for button in ("#tools-toggle", "#fn-list", "#fn-changes"):
+            page.click(button)
+            assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+            page.wait_for_timeout(250)  # allow the panel's transform to finish
+            box = page.locator("#drawer").bounding_box()
+            assert box and box["x"] >= -1 and box["x"] + box["width"] <= width + 1, box
+        page.click("#drawer-close")
+        assert page.evaluate("document.activeElement.id") == "tools-toggle"
+    finally:
+        page.set_viewport_size({"width": 1440, "height": 900})

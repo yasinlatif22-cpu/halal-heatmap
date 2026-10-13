@@ -5,23 +5,23 @@
 
   // Status colours carry no red or green meaning beyond status itself: the map has no price colour mode.
   const STATUS = {
-    pass: { label: 'Pass', symbol: '✓', fill: '#1f9d55', text: '#04140a' },
-    needs_review: { label: 'Needs review', symbol: '?', fill: '#f59e0b', text: '#0a0b0d' },
-    fail: { label: 'Fail', symbol: '✕', fill: '#b3261e', text: '#ffffff' },
-    insufficient_data: { label: 'Insufficient data', symbol: '–', fill: '#1f232a', text: '#e5e7eb' },  // the dark hatch on the tile
+    pass: { label: 'Pass', symbol: '✓', fill: '#245f52', text: '#f1faf6' },
+    needs_review: { label: 'Needs review', symbol: '?', fill: '#715d36', text: '#fff5df' },
+    fail: { label: 'Fail', symbol: '✕', fill: '#6d3e47', text: '#fff1f3' },
+    insufficient_data: { label: 'Insufficient data', symbol: '–', fill: '#35424f', text: '#edf1f3' },  // the dark hatch on the tile
   };
   const NEAR_STATUSES = ['pass', 'needs_review'];
   const NEAR_LINE = 'rgba(245, 246, 248, 0.75)';  // within the margin of a limit: a light outline
   const SELECT_LINE = '#f5f6f8';                    // the selected tile
-  const REVIEW_NEAR = '#b45309';                    // needs review within the margin: deep amber, hatched
+  const REVIEW_NEAR = '#65512c';                    // needs review within the margin: deep amber, hatched
   const REVIEW_NEAR_TEXT = '#fffbeb';
-  const HATCH = '#fde68a';
-  const UNKNOWN_BG = '#1f232a';                     // insufficient data: dark hatch, so it reads as unknown
-  const UNKNOWN_HATCH = '#8b929c';
-  const DIM = '#1a1d22';                            // filtered out
-  const NEUTRAL = '#15181d';                        // sector and root tiles
-  const TILE_GAP = '#0a0b0d';                       // the seam between tiles: the page colour
-  const PARENT_INK = '#c4c9d0';
+  const HATCH = '#b7a47c';
+  const UNKNOWN_BG = '#35424f';                     // insufficient data: dark hatch, so it reads as unknown
+  const UNKNOWN_HATCH = '#596a79';
+  const DIM = '#1d2832';                            // filtered out
+  const NEUTRAL = '#101820';                        // sector and root tiles
+  const TILE_GAP = '#101820';                       // the seam between tiles: the page colour
+  const PARENT_INK = '#a4b3bf';
   const UNSIZED = '#3a404a';
   // URL flag: ?display=1 is the kiosk view.
   const PARAMS = new URLSearchParams(location.search);
@@ -113,10 +113,12 @@
   const money = (value) => {
     if (value == null) return 'n/a';
     const abs = Math.abs(value);
+    if (abs >= 1e12) return `$${(value / 1e12).toFixed(2)} tn`;
     if (abs >= 1e9) return `$${(value / 1e9).toFixed(2)} bn`;
     if (abs >= 1e6) return `$${(value / 1e6).toFixed(1)} m`;
     return `$${Math.round(value).toLocaleString('en-US')}`;
   };
+  const denominatorLabel = (basis) => ({ avg_12m: '12-month average market cap', avg_36m: '36-month average market cap', spot: 'Spot market cap', revenue: 'Revenue' }[basis] || basis);
   const number = (value) => (value == null ? 'n/a' : Number(value).toLocaleString('en-US', { maximumFractionDigits: 2 }));
   const badge = (status) => {
     const s = STATUS[status] || { label: status };
@@ -190,11 +192,23 @@
   /* ---------- drawer: the tools are hidden until asked for ---------- */
 
   // The drawer overlays the right edge of the page. It never changes the size or place of the map.
-  function setDrawer(open) {
+  function setDrawer(open, mode = 'filters') {
     const on = open && !DISPLAY;
+    const restoreFocus = !on && el.drawer.contains(document.activeElement);
     el.drawer.classList.toggle('open', on);
+    el.drawer.dataset.mode = mode;
     el.drawer.inert = !on;
-    el.toolsToggle.setAttribute('aria-expanded', String(on));
+    el.toolsToggle.setAttribute('aria-expanded', String(on && mode === 'filters'));
+    const labels = { filters: 'Screening filters', detail: 'Company research', list: 'Equity screener', changes: 'Status changes' };
+    $('drawer-title').textContent = labels[mode];
+    const active = on && mode === 'list' ? el.fnList : on && mode === 'changes' ? el.fnChanges : el.fnMap;
+    [el.fnMap, el.fnList, el.fnChanges].forEach((button) => {
+      if (button === active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
+    });
+    $('view-title').textContent = active === el.fnList ? 'Equity screener' : active === el.fnChanges ? 'Status changes' : 'Market map';
+    $('view-description').textContent = active === el.fnList ? 'Screened constituents, sortable and exportable' : active === el.fnChanges ? 'Changes measured against the previous valid screen' : 'Tile area reflects spot market capitalization';
+    if (restoreFocus) el.toolsToggle.focus();
+    if (on) el.drawer.scrollTop = 0;
   }
   const drawerOpen = () => el.drawer.classList.contains('open');
 
@@ -292,34 +306,29 @@
           pattern: { shape, fgcolor: fg, bgcolor: bg, solidity },
         },
         hoverlabel: { bgcolor: 'rgba(0,0,0,0)', bordercolor: 'rgba(0,0,0,0)', font: { size: 1, color: 'rgba(0,0,0,0)' } },
-        textfont: { size: DISPLAY ? 16 : 13, color: textColours, family: '"Mirsad Mono", ui-monospace, monospace' },
-        tiling: { pad: 2 },
+        textfont: { size: DISPLAY ? 16 : 13, color: textColours, family: '-apple-system, BlinkMacSystemFont, sans-serif' },
+        tiling: { pad: 3 },
         pathbar: { visible: false },
       };
       const layout = {
         margin: { l: 0, r: 0, t: 0, b: 0 },
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
-        font: { family: '"Mirsad Condensed", sans-serif', color: PARENT_INK },
+        font: { family: '-apple-system, BlinkMacSystemFont, sans-serif', color: PARENT_INK },
         uniformtext: { minsize: 9, mode: 'hide' },
       };
       // The kiosk is a display, not a tool: no mode bar.
-      const config = { responsive: true, displaylogo: false, displayModeBar: !DISPLAY, modeBarButtonsToRemove: ['lasso2d', 'select2d'] };
+      const config = { responsive: true, displaylogo: false, displayModeBar: false, modeBarButtonsToRemove: ['lasso2d', 'select2d'] };
       await Plotly.react(el.treemap, [trace], layout, config);
       if (plotBound) return;
       plotBound = true;
-      el.treemap.on('plotly_click', (ev) => {
+      // Cancel the treemap's default drill-down before it starts an animation.
+      // The generic plotly_click event runs too late to prevent the colour flash.
+      el.treemap.on('plotly_treemapclick', (ev) => {
         const point = ev.points && ev.points[0];
-        if (!point) return;
-        const id = point.data.ids[point.pointNumber];
-        // Plotly drills into any node it is clicked on. The map is kept whole, so reset the view on every click; a leaf
-        // click then opens its stock. Plotly applies its own drill-down after this handler returns, so reset on the next tick.
-        setTimeout(() => {
-          Promise.resolve().then(() => Plotly.restyle(el.treemap, { level: 'all' }))
-            .catch((error) => showError('The heatmap could not be updated. Reload to try again.', error));
-        }, 0);
-        if (DISPLAY || !byTicker.has(id)) return;
-        openDetail(id);
+        const id = point && point.data.ids[point.pointNumber];
+        if (!DISPLAY && byTicker.has(id)) openDetail(id);
+        return false;
       });
       el.treemap.on('plotly_hover', (ev) => {
         const point = ev.points && ev.points[0];
@@ -410,6 +419,7 @@
         <td><button type="button" class="pin" data-pin="${esc(s.ticker)}" aria-pressed="${pinned}" aria-label="${pinned ? 'Unpin' : 'Pin'} ${esc(s.ticker)}">${pinned ? '★' : '☆'}</button></td>
         <td><button type="button" class="stock" data-ticker="${esc(s.ticker)}">${esc(s.ticker)}</button></td>
         <td>${esc(s.name)}</td>
+        <td class="num">${money(s.spot_market_cap)}</td>
         <td>${badge(s.status)}</td>
         <td>${near}</td>
         <td>${esc(BASIS[s.interest_income.key].short)}${lowerBasis(s) ? ' <span class="badge lower">lower confidence</span>' : ''}</td>
@@ -437,6 +447,7 @@
       ? `Showing ${shown.length} of ${members.length} stocks`
       : `Showing ${shown.length} of ${scoped.length} stocks in ${sectorFilter}`;
     el.reset.hidden = !filtersActive();
+    fitMap();
     drawTreemap();
     lastShown = sortStocks(listed);
     drawList(lastShown);
@@ -445,10 +456,13 @@
 
   // Status counts from the export. Each chip is the legend for its colour and a status filter.
   function drawCounts() {
-    const by = meta.counts.by_status;
-    el.counts.innerHTML = STATUS_CHIPS.map(([key, label, glyph]) =>
+    const by = members.reduce((counts, stock) => {
+      counts[stock.status] = (counts[stock.status] || 0) + 1;
+      return counts;
+    }, {});
+    el.counts.innerHTML = STATUS_CHIPS.map(([key, label]) =>
       `<button type="button" class="chip st-${key}" data-status="${key}" aria-pressed="true"${DISPLAY ? ' disabled' : ''}>` +
-      `<span class="chip-n">${by[key] ?? 0}</span><span class="chip-l"><span aria-hidden="true">${glyph}</span> ${label}</span></button>`).join('');
+      `<span class="chip-l">${label}</span><span class="chip-n">${by[key] ?? 0}</span><span class="chip-share">${members.length ? ((by[key] ?? 0) / members.length * 100).toFixed(1) : '0.0'}% of universe</span></button>`).join('');
   }
   function syncCounts() {
     el.counts.querySelectorAll('[data-status]').forEach((chip) => {
@@ -558,17 +572,19 @@
     const rows = ['debt', 'cash', 'impure_income'].map((key) => {
       const r = s.ratios[key];
       if (r.ratio == null) return `<tbody><tr class="ratio-head"><th colspan="4" scope="colgroup">${esc(r.label)}</th></tr><tr><td colspan="4" class="muted">not available</td></tr></tbody>`;
-      const result = r.passed ? 'Within limit' : 'Over limit';
+      const result = r.passed ? 'Within limit' : 'Outside limit';
       const near = r.near_threshold ? ' <span class="mark" aria-hidden="true">◆</span> near' : '';
       return `<tbody>
         <tr class="ratio-head"><th colspan="4" scope="colgroup">${esc(r.label)}</th></tr>
+        <tr class="ratio-columns"><th scope="col">Ratio</th><th scope="col">Limit</th><th scope="col">Headroom</th><th scope="col">Result</th></tr>
         <tr class="ratio-vals">
           <td data-label="Value" class="num">${pct(r.ratio)}</td>
           <td data-label="Limit" class="num">${esc(r.operator)} ${trimPct(r.limit)}</td>
           <td data-label="Headroom" class="num">${(r.headroom * 100).toFixed(2)} points <span class="muted">(${pct(r.headroom_rel, 0)} of limit)</span></td>
           <td data-label="Result">${result}${near}</td>
         </tr>
-        <tr class="figures"><td colspan="4" class="muted">${money(r.numerator)} ÷ ${money(r.denominator)}, ${esc(r.denominator_basis)}</td></tr>
+        <tr class="ratio-meter-row"><td colspan="4"><div class="ratio-meter" aria-hidden="true"><span class="ratio-fill ${r.passed ? 'within' : 'over'}" style="width:${Math.max(0, Math.min(100, r.ratio / r.limit * 80)).toFixed(2)}%"></span><span class="ratio-limit"></span></div></td></tr>
+        <tr class="figures"><td colspan="4" class="muted">${money(r.numerator)} ÷ ${money(r.denominator)}, ${esc(denominatorLabel(r.denominator_basis))}</td></tr>
       </tbody>`;
     }).join('');
     return `<table class="ratios">${rows}</table>`;
@@ -686,7 +702,7 @@
       <dl class="kv key-facts">
         <div><dt>Screen date</dt><dd>${esc(s.screen_date)}</dd></div>
         <div><dt>Market cap (spot)</dt><dd>${money(s.spot_market_cap)}</dd></div>
-        <div><dt>Driving market cap</dt><dd>${esc(s.market_cap.driving)}</dd></div>
+        <div><dt>Driving market cap</dt><dd>${esc(denominatorLabel(s.market_cap.driving))}</dd></div>
         <div><dt>Last-close price change</dt><dd>${change}</dd></div>
       </dl>
       ${section('Financial ratios', ratioTable(s), true, '3')}
@@ -719,7 +735,7 @@
         ${s.spot_divergence.factor != null ? `<p class="muted">Spot and 12-month average market cap are ${number(s.spot_divergence.factor)}× apart.</p>` : ''}`)}
       ${factsTable(s.facts)}
     `;
-    setDrawer(true);
+    setDrawer(true, 'detail');
     el.detail.focus({ preventScroll: true });
     // On a phone the drawer covers the map: bring the stock to the top of the drawer, past the filters. Only the drawer
     // scrolls, so the page header and the map stay where they are.
@@ -850,18 +866,18 @@
     });
 
     // Tools: a toggle, a close button, and Escape. None of them moves the map.
-    el.toolsToggle.addEventListener('click', () => setDrawer(!drawerOpen()));
+    el.toolsToggle.addEventListener('click', () => setDrawer(!drawerOpen() || el.drawer.dataset.mode !== 'filters'));
     el.drawerClose.addEventListener('click', () => { setDrawer(false); el.toolsToggle.focus(); });
     el.fnMap.addEventListener('click', () => setDrawer(false));
     el.fnList.addEventListener('click', () => {
-      setDrawer(true);
+      setDrawer(true, 'list');
       el.listWrap.open = true;
-      el.listQ.focus();
+      el.listQ.focus({ preventScroll: true });
     });
     el.fnChanges.addEventListener('click', () => {
-      setDrawer(true);
+      setDrawer(true, 'changes');
       el.changesPanel.open = true;
-      el.changesPanel.scrollIntoView({ block: 'start' });
+      el.drawer.scrollTop = 0;
     });
 
     // Command search: type a ticker or a name, move with the arrow keys, Enter opens the stock.
