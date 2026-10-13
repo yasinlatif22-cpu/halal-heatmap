@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 
 from halal_heatmap.config import Business
 
@@ -26,10 +27,28 @@ def _sic_number(sic: str | None) -> int | None:
         return None
 
 
-def screen_business(sic: str | None, gics_sub_industry: str | None, cfg: Business) -> BusinessResult:
+def screen_business(
+    sic: str | None, gics_sub_industry: str | None, cfg: Business,
+    *, cik: int | None = None, as_of: date | None = None,
+) -> BusinessResult:
     sic_number = _sic_number(sic)
     gics = (gics_sub_industry or "").strip() or None
     matches: dict[str, list[tuple[str, str]]] = {FAIL: [], NEEDS_REVIEW: []}
+    for exclusion in cfg.issuer_exclusions:
+        if cik != exclusion.cik or as_of is None:
+            continue
+        state = exclusion.state_on(as_of)
+        if state == "pending":
+            continue
+        evidence = (
+            f"issuer CIK {cik}: {exclusion.reason}; reviewed by {exclusion.reviewer} "
+            f"on {exclusion.reviewed_on}, expires {exclusion.expires_on}; "
+            f"evidence: {', '.join(exclusion.sources)}"
+        )
+        outcome = FAIL if state == "active" else NEEDS_REVIEW
+        if state == "expired":
+            evidence = "issuer evidence review expired; " + evidence
+        matches[outcome].append((exclusion.category, evidence))
     for rule in cfg.rules:
         if gics and gics in rule.gics_sub_industries:
             matches[rule.action].append((rule.category, f"GICS sub-industry '{gics}'"))
