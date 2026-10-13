@@ -34,15 +34,15 @@
     disclosed: { short: 'Disclosed interest', long: 'Disclosed interest income, trailing 12 months', confidence: 'standard' },
     disclosed_partial: {
       short: 'Disclosed, partial',
-      long: 'Interest income summed over segments: partial, so it supports a pass only well below the limit', confidence: 'lower',
+      long: 'Interest income summed over segments: partial, so it supports a pass only well below the limit', confidence: 'standard',
     },
     annual_fallback: {
       short: 'Annual figure',
-      long: 'Latest annual interest income, older than 12 months', confidence: 'lower',
+      long: 'Latest annual interest income used as a fallback', confidence: 'standard',
     },
     net_investment_income: {
       short: 'Net investment income',
-      long: 'Net investment income, not gross interest: supports a pass only well below the limit', confidence: 'lower',
+      long: 'Net investment income, not gross interest: supports a pass only well below the limit', confidence: 'standard',
     },
     upper_bound_cash: {
       short: 'Upper bound on cash',
@@ -69,7 +69,7 @@
 
   const $ = (id) => document.getElementById(id);
   const el = {
-    subtitle: $('subtitle'), banner: $('banner'), loadError: $('load-error'), app: $('app'),
+    subtitle: $('subtitle'), banner: $('banner'), loadError: $('load-error'), loadErrorMessage: $('load-error-message'), retry: $('retry'), app: $('app'),
     q: $('q'), qResults: $('q-results'), go: $('go'),
     fnMap: $('fn-map'), fnList: $('fn-list'), fnChanges: $('fn-changes'), toolsToggle: $('tools-toggle'),
     drawer: $('drawer'), drawerClose: $('drawer-close'),
@@ -219,92 +219,93 @@
     return `${s.ticker} ${STATUS[s.status].symbol}${stale}`;
   }
 
-  function drawTreemap() {
-    const sectors = new Map();
-    for (const s of scopeMembers()) {
-      const key = s.sector || 'Unclassified';
-      if (!sectors.has(key)) sectors.set(key, []);
-      sectors.get(key).push(s);
-    }
-    const sized = scopeMembers().filter((s) => s.spot_market_cap != null);
-    const total = sized.reduce((sum, s) => sum + s.spot_market_cap, 0);
-    const ids = ['all'];
-    const labels = ['S&P 500'];
-    const parents = [''];
-    const values = [total];
-    const colours = [NEUTRAL];
-    const textColours = [PARENT_INK];
-    const lines = [TILE_GAP];
-    const lineWidth = [1];
-    const shape = [''];
-    const fg = [HATCH];
-    const bg = [NEUTRAL];
-    const solidity = [0.4];
-
-    for (const [sector, stocks] of [...sectors.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-      const sectorValue = stocks.reduce((sum, s) => sum + (s.spot_market_cap || 0), 0);
-      ids.push(`sector:${sector}`);
-      labels.push(sector);
-      parents.push('all');
-      values.push(sectorValue);
-      colours.push(NEUTRAL);
-      textColours.push(PARENT_INK);
-      lines.push(TILE_GAP);
-      lineWidth.push(1);
-      shape.push('');
-      fg.push(HATCH);
-      bg.push(NEUTRAL);
-      solidity.push(0.4);
-      for (const s of stocks.filter((x) => x.spot_market_cap != null)) {
-        const near = isNear(s);
-        const hatched = near && s.status === 'needs_review';
-        const unknown = s.status === 'insufficient_data';
-        const shown = visible(s);
-        const fill = !shown ? DIM : hatched ? REVIEW_NEAR : unknown ? UNKNOWN_BG : STATUS[s.status].fill;
-        ids.push(s.ticker);
-        labels.push(tileLabel(s));
-        parents.push(`sector:${sector}`);
-        values.push(s.spot_market_cap);
-        colours.push(fill);
-        textColours.push(hatched ? REVIEW_NEAR_TEXT : unknown ? STATUS.insufficient_data.text : STATUS[s.status].text);
-        const isSelected = s.ticker === selected;
-        lines.push(isSelected ? SELECT_LINE : near && s.status === 'pass' ? NEAR_LINE : TILE_GAP);
-        lineWidth.push(isSelected ? 3 : near && s.status === 'pass' ? 1.25 : 1);
-        shape.push(hatched || unknown ? '/' : '');
-        fg.push(hatched ? HATCH : unknown ? UNKNOWN_HATCH : HATCH);
-        bg.push(fill);
-        solidity.push(hatched ? 0.22 : 0.45);
+  async function drawTreemap() {
+    try {
+      const sectors = new Map();
+      for (const s of scopeMembers()) {
+        const key = s.sector || 'Unclassified';
+        if (!sectors.has(key)) sectors.set(key, []);
+        sectors.get(key).push(s);
       }
-    }
+      const sized = scopeMembers().filter((s) => s.spot_market_cap != null);
+      const total = sized.reduce((sum, s) => sum + s.spot_market_cap, 0);
+      const ids = ['all'];
+      const labels = ['S&P 500'];
+      const parents = [''];
+      const values = [total];
+      const colours = [NEUTRAL];
+      const textColours = [PARENT_INK];
+      const lines = [TILE_GAP];
+      const lineWidth = [1];
+      const shape = [''];
+      const fg = [HATCH];
+      const bg = [NEUTRAL];
+      const solidity = [0.4];
 
-    const trace = {
-      type: 'treemap',
-      ids,
-      labels,
-      parents,
-      values,
-      branchvalues: 'total',
-      hovertemplate: '<extra></extra>',
-      marker: {
-        colors: colours,
-        line: { color: lines, width: lineWidth },
-        pattern: { shape, fgcolor: fg, bgcolor: bg, solidity },
-      },
-      hoverlabel: { bgcolor: 'rgba(0,0,0,0)', bordercolor: 'rgba(0,0,0,0)', font: { size: 1, color: 'rgba(0,0,0,0)' } },
-      textfont: { size: DISPLAY ? 16 : 13, color: textColours, family: '"Mirsad Mono", ui-monospace, monospace' },
-      tiling: { pad: 2 },
-      pathbar: { visible: false },
-    };
-    const layout = {
-      margin: { l: 0, r: 0, t: 0, b: 0 },
-      paper_bgcolor: 'rgba(0,0,0,0)',
-      plot_bgcolor: 'rgba(0,0,0,0)',
-      font: { family: '"Mirsad Condensed", sans-serif', color: PARENT_INK },
-      uniformtext: { minsize: 9, mode: 'hide' },
-    };
-    // The kiosk is a display, not a tool: no mode bar.
-    const config = { responsive: true, displaylogo: false, displayModeBar: !DISPLAY, modeBarButtonsToRemove: ['lasso2d', 'select2d'] };
-    Plotly.react(el.treemap, [trace], layout, config).then(() => {
+      for (const [sector, stocks] of [...sectors.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const sectorValue = stocks.reduce((sum, s) => sum + (s.spot_market_cap || 0), 0);
+        ids.push(`sector:${sector}`);
+        labels.push(sector);
+        parents.push('all');
+        values.push(sectorValue);
+        colours.push(NEUTRAL);
+        textColours.push(PARENT_INK);
+        lines.push(TILE_GAP);
+        lineWidth.push(1);
+        shape.push('');
+        fg.push(HATCH);
+        bg.push(NEUTRAL);
+        solidity.push(0.4);
+        for (const s of stocks.filter((x) => x.spot_market_cap != null)) {
+          const near = isNear(s);
+          const hatched = near && s.status === 'needs_review';
+          const unknown = s.status === 'insufficient_data';
+          const shown = visible(s);
+          const fill = !shown ? DIM : hatched ? REVIEW_NEAR : unknown ? UNKNOWN_BG : STATUS[s.status].fill;
+          ids.push(s.ticker);
+          labels.push(tileLabel(s));
+          parents.push(`sector:${sector}`);
+          values.push(s.spot_market_cap);
+          colours.push(fill);
+          textColours.push(hatched ? REVIEW_NEAR_TEXT : unknown ? STATUS.insufficient_data.text : STATUS[s.status].text);
+          const isSelected = s.ticker === selected;
+          lines.push(isSelected ? SELECT_LINE : near && s.status === 'pass' ? NEAR_LINE : TILE_GAP);
+          lineWidth.push(isSelected ? 3 : near && s.status === 'pass' ? 1.25 : 1);
+          shape.push(hatched || unknown ? '/' : '');
+          fg.push(hatched ? HATCH : unknown ? UNKNOWN_HATCH : HATCH);
+          bg.push(fill);
+          solidity.push(hatched ? 0.22 : 0.45);
+        }
+      }
+
+      const trace = {
+        type: 'treemap',
+        ids,
+        labels,
+        parents,
+        values,
+        branchvalues: 'total',
+        hovertemplate: '<extra></extra>',
+        marker: {
+          colors: colours,
+          line: { color: lines, width: lineWidth },
+          pattern: { shape, fgcolor: fg, bgcolor: bg, solidity },
+        },
+        hoverlabel: { bgcolor: 'rgba(0,0,0,0)', bordercolor: 'rgba(0,0,0,0)', font: { size: 1, color: 'rgba(0,0,0,0)' } },
+        textfont: { size: DISPLAY ? 16 : 13, color: textColours, family: '"Mirsad Mono", ui-monospace, monospace' },
+        tiling: { pad: 2 },
+        pathbar: { visible: false },
+      };
+      const layout = {
+        margin: { l: 0, r: 0, t: 0, b: 0 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { family: '"Mirsad Condensed", sans-serif', color: PARENT_INK },
+        uniformtext: { minsize: 9, mode: 'hide' },
+      };
+      // The kiosk is a display, not a tool: no mode bar.
+      const config = { responsive: true, displaylogo: false, displayModeBar: !DISPLAY, modeBarButtonsToRemove: ['lasso2d', 'select2d'] };
+      await Plotly.react(el.treemap, [trace], layout, config);
       if (plotBound) return;
       plotBound = true;
       el.treemap.on('plotly_click', (ev) => {
@@ -313,7 +314,10 @@
         const id = point.data.ids[point.pointNumber];
         // Plotly drills into any node it is clicked on. The map is kept whole, so reset the view on every click; a leaf
         // click then opens its stock. Plotly applies its own drill-down after this handler returns, so reset on the next tick.
-        setTimeout(() => Plotly.restyle(el.treemap, { level: 'all' }), 0);
+        setTimeout(() => {
+          Promise.resolve().then(() => Plotly.restyle(el.treemap, { level: 'all' }))
+            .catch((error) => showError('The heatmap could not be updated. Reload to try again.', error));
+        }, 0);
         if (DISPLAY || !byTicker.has(id)) return;
         openDetail(id);
       });
@@ -323,7 +327,9 @@
         if (byTicker.has(id)) showHover(byTicker.get(id)); else clearHover();
       });
       el.treemap.on('plotly_unhover', clearHover);
-    });
+    } catch (error) {
+      showError('The heatmap could not be drawn. Reload to try again.', error);
+    }
   }
 
   /* ---------- watchlist ---------- */
@@ -933,6 +939,15 @@
     }, 10 * 60 * 1000);
   }
 
+  function showError(message, error) {
+    console.error(message, error);
+    el.loadErrorMessage.textContent = message;
+    el.loadError.hidden = false;
+    el.subtitle.textContent = 'The screen could not be displayed.';
+  }
+
+  el.retry.addEventListener('click', () => location.reload());
+
   async function start() {
     tickClock();
     setInterval(tickClock, 1000);
@@ -945,25 +960,28 @@
       changes = changeData.changes;
       indexEvents = changeData.index_events;
     } catch (error) {
-      el.loadError.textContent = `Could not load the data (${error.message}). Run .venv/bin/halal-heatmap export, then serve this folder over HTTP: python3 -m http.server 8000 --directory web, and open http://localhost:8000/tool/.`;
-      el.loadError.hidden = false;
-      el.subtitle.textContent = 'No data loaded.';
+      showError('Screen data could not be loaded. Reload to try again. If this continues, the site’s data export needs to be restored.', error);
       return;
     }
-    if (DISPLAY) watchForNewExport(meta.generated_at);
-    byTicker = new Map(screens.map((s) => [s.ticker, s]));
-    members = screens.filter((s) => s.in_index);
-    fillSectorSelector();
-    fillChrome();
-    wire();
-    readFilters();
-    el.app.hidden = false;
-    refresh();
-    drawChanges();
-    // A ?sector= link is for looking at one sector, so it opens the tools with that sector selected.
-    if (sectorFilter !== 'all') setDrawer(true);
-    openFromHash();
-    window.addEventListener('hashchange', openFromHash);
+    try {
+      if (DISPLAY) watchForNewExport(meta.generated_at);
+      byTicker = new Map(screens.map((s) => [s.ticker, s]));
+      members = screens.filter((s) => s.in_index);
+      fillSectorSelector();
+      fillChrome();
+      wire();
+      readFilters();
+      el.app.hidden = false;
+      refresh();
+      drawChanges();
+      // A ?sector= link is for looking at one sector, so it opens the tools with that sector selected.
+      if (sectorFilter !== 'all') setDrawer(true);
+      openFromHash();
+      window.addEventListener('hashchange', openFromHash);
+    } catch (error) {
+      el.app.hidden = true;
+      showError('The screen could not be opened. Reload to try again. If this continues, the site’s data export needs to be checked.', error);
+    }
   }
 
   function openFromHash() {

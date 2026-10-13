@@ -176,6 +176,25 @@ def test_no_prices_means_no_price_fields_are_filled(world, cfg, store):
     assert site["meta.json"]["daily_change"]["included"] is False
 
 
+def test_removed_stock_keeps_its_audit_without_fetching_unavailable_prices(world, cfg, store):
+    screen(world, cfg, store, date(2026, 6, 1), ALL)
+    original = screen_of(build_site(store, cfg, OVR), "DEBT")
+    run_screen(date(2026, 8, 3), cfg, world.constituents("PASS"), world, world, OVR, store)
+    prices = Prices(
+        {"PASS": [(date(2026, 7, 30), 50.0), (date(2026, 7, 31), 55.0)]},
+        failing=["DEBT", "NEAR", "OVR"],
+    )
+    site = build_site(store, cfg, OVR, prices)
+    assert [ticker for ticker, _, _ in prices.asked] == ["PASS"]
+    assert site["meta.json"]["daily_change"]["failed"] == []
+    removed = screen_of(site, "DEBT")
+    assert removed["in_index"] is False
+    assert removed["daily_change"] is None
+    assert removed["facts"] == original["facts"]
+    assert removed["status"] == original["status"]
+    assert screen_of(site, "PASS")["daily_change"]["pct"] == pytest.approx(0.10)
+
+
 def test_daily_changes_returns_only_the_percent_and_its_date():
     prices = Prices({"X": [(date(2026, 7, 30), 50.0), (date(2026, 7, 31), 55.0)]})
     changes, failed = daily_changes(prices, [("X", date(2026, 8, 3))])
@@ -258,17 +277,17 @@ def _basis_row(**changes):
     "changes, key, confidence",
     [
         ({}, "disclosed", "standard"),
-        ({"interest_income_dimensional": 1}, "disclosed_partial", "lower"),
+        ({"interest_income_dimensional": 1}, "disclosed_partial", "standard"),
         (
             {"interest_income_basis": "annual_fallback", "interest_income_annual": 1,
              "interest_income_period_end": "2025-12-31"},
             "annual_fallback",
-            "lower",
+            "standard",
         ),
         (
             {"interest_income_basis": "net_investment_income", "interest_income_tags": "us-gaap:InvestmentIncomeNet"},
             "net_investment_income",
-            "lower",
+            "standard",
         ),
         (
             {"interest_income_basis": "upper_bound_no_disclosure", "interest_income": None,
@@ -285,7 +304,7 @@ def _basis_row(**changes):
         ({"interest_income_basis": None, "interest_income": None}, "none", "none"),
     ],
 )
-def test_every_basis_but_disclosed_gross_interest_is_lower_confidence(changes, key, confidence):
+def test_only_undisclosed_interest_upper_bounds_are_lower_confidence(changes, key, confidence):
     basis = _interest_basis(_basis_row(**changes))
     assert (basis["key"], basis["confidence"]) == (key, confidence)
 
