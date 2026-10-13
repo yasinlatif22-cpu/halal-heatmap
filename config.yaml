@@ -161,9 +161,11 @@ inputs:
           - [DebtAndCapitalLeaseObligations]
           - [DebtInstrumentCarryingAmount]
           - [SeniorNotes]
+          - [SeniorLongTermNotes, SeniorNotesCurrent]
           - [NotesPayable]
           - [ConvertibleNotesPayableNoncurrent, ConvertibleNotesPayableCurrent]
           - [ConvertibleNotesPayable]
+          - [ConvertibleLongTermNotesPayable]
       - name: short_term_debt
         required: false
         any_of:
@@ -240,8 +242,10 @@ inputs:
     components:
       - name: total_liabilities
         required: true
+        complete_alternatives: true
         any_of:
           - [Liabilities]
+          - [LiabilitiesCurrent, LiabilitiesNoncurrent]
   revenue:
     period: ttm
     combine: first
@@ -253,6 +257,7 @@ inputs:
           - [RevenueFromContractWithCustomerExcludingAssessedTax]
           - [RevenueFromContractWithCustomerIncludingAssessedTax]
           - [SalesRevenueNet]
+          - [RegulatedAndUnregulatedOperatingRevenue]
   # Gross interest income only. Net "other income" lines must never be listed here.
   # When these tags give no figure, interest_income_sources below is tried, in this order:
   # trailing 12 months from the filing's own XBRL, the annual fallback, sums over dimensions,
@@ -347,6 +352,86 @@ business:
   # financing receivables are above this share of total assets (a lending arm).   project rule
   financing_receivables:
     max_share_of_assets: 0.05
+  # Issuer-specific prohibited activities verified from primary evidence. These only fail;
+  # expiration returns the issuer to review. Sector classifications remain unchanged.
+  issuer_exclusions:
+    - cik: 936468
+      category: weapons
+      reason: "Lockheed Martin manufactures tactical missiles and precision-strike weapons, including JASSM, Hellfire and Javelin, per its 2025 10-K business description."
+      sources: ["https://www.sec.gov/Archives/edgar/data/936468/000162828026004195/lmt-20251231.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 1133421
+      category: weapons
+      reason: "Northrop Grumman's 2025 10-K identifies manufacture of strategic missiles, precision-strike weapons, guns, ammunition and munitions."
+      sources: ["https://www.sec.gov/Archives/edgar/data/1133421/000113342126000003/noc-20251231.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 40533
+      category: weapons
+      reason: "General Dynamics' 2025 10-K identifies Combat Systems as a manufacturer of weapon systems and munitions and separately reports their sales."
+      sources: ["https://www.sec.gov/Archives/edgar/data/40533/000004053326000006/gd-20251231.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 101829
+      category: weapons
+      reason: "RTX's Raytheon manufactures missiles and munitions; its February 2026 disclosure describes agreements expanding AMRAAM, Tomahawk and other missile production."
+      sources: ["https://www.rtx.com/news/2026/02/04/munitions-agreements"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 217346
+      category: weapons
+      reason: "Textron's 2025 10-K explicitly includes weapons and related components among Textron Systems' products."
+      sources: ["https://www.sec.gov/Archives/edgar/data/217346/000021734626000006/txt-20260103.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 820027
+      category: conventional_insurance
+      reason: "Ameriprise's 2025 annual report identifies its RiverSource insurance and annuity business and Ameriprise Bank's lending, certificates of deposit and deposit products."
+      sources: ["https://www.ameriprise.com/microsite/2025-annual-report"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 886982
+      category: conventional_banking
+      reason: "Goldman Sachs' 2025 10-K identifies Goldman Sachs Bank USA and its conventional deposit-taking, corporate lending, credit-card lending and mortgage operations."
+      sources: ["https://www.sec.gov/Archives/edgar/data/886982/000088698226000091/gs-20251231.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 895421
+      category: conventional_banking
+      reason: "Morgan Stanley's 2025 10-K identifies Morgan Stanley Bank N.A. and Morgan Stanley Private Bank N.A. as its FDIC-insured U.S. depository bank subsidiaries."
+      sources: ["https://www.sec.gov/Archives/edgar/data/895421/000089542126000086/ms-20251231.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 1858681
+      category: conventional_insurance
+      reason: "Apollo's 2025 10-K describes its Athene retirement-services business as an operator of annuity, insurance and reinsurance subsidiaries."
+      sources: ["https://ir.apollo.com/sec-filings/content/0001858681-26-000013/apo-20251231.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 1404912
+      category: conventional_insurance
+      reason: "KKR's 2025 10-K identifies wholly owned Global Atlantic as its insurance business, including annuity, life-insurance and reinsurance underwriting."
+      sources: ["https://www.sec.gov/Archives/edgar/data/1404912/000140491226000007/kkr-20251231.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
+    - cik: 202058
+      category: weapons
+      reason: "L3Harris' fiscal 2025 10-K explicitly describes production of weapon systems, precision weapons and armament systems."
+      sources: ["https://www.sec.gov/Archives/edgar/data/202058/000020205826000015/hrs-20260102.htm"]
+      reviewer: "automated evidence review"
+      reviewed_on: 2026-10-13
+      expires_on: 2027-10-13
   rules:
     - category: alcohol
       action: fail

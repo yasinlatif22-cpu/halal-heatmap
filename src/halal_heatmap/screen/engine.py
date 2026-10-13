@@ -340,7 +340,9 @@ def _decide_before_checks(
 
 
 def screen(inputs: ScreenInputs, cfg: Config, trigger: str = "manual") -> ScreenResult:
-    business = screen_business(inputs.sic, inputs.gics_sub_industry, cfg.business)
+    business = screen_business(
+        inputs.sic, inputs.gics_sub_industry, cfg.business, cik=inputs.cik, as_of=inputs.screen_date
+    )
     financing_share = _share(inputs.financing_receivables, inputs.total_assets)
     limit = cfg.business.financing_receivables_max_share
     if business.outcome == PASS and financing_share is not None and financing_share > limit:

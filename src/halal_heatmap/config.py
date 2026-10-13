@@ -8,8 +8,10 @@ import json
 import operator
 import re
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import yaml
 
@@ -200,6 +202,7 @@ class Component:
     name: str
     required: bool
     any_of: tuple[tuple[TagRef, ...], ...]
+    complete_alternatives: bool = False
 
 
 @dataclass(frozen=True)
@@ -249,10 +252,27 @@ class BusinessRule:
 
 
 @dataclass(frozen=True)
+class IssuerExclusion:
+    cik: int
+    category: str
+    reason: str
+    sources: tuple[str, ...]
+    reviewer: str
+    reviewed_on: date
+    expires_on: date
+
+    def state_on(self, day: date) -> str:
+        if day < self.reviewed_on:
+            return "pending"
+        return "expired" if day > self.expires_on else "active"
+
+
+@dataclass(frozen=True)
 class Business:
     required_classifications: tuple[str, ...]
     rules: tuple[BusinessRule, ...]
     financing_receivables_max_share: float
+    issuer_exclusions: tuple[IssuerExclusion, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -380,7 +400,12 @@ def _inputs(raw: dict) -> dict[str, InputSpec]:
             alternatives = tuple(tuple(TagRef.parse(t) for t in alt) for alt in _req(comp, cpath, "any_of"))
             if not alternatives or any(not alt for alt in alternatives):
                 raise ConfigError(f"config: '{cpath}' has an empty any_of entry")
-            components.append(Component(_req(comp, cpath, "name"), bool(_req(comp, cpath, "required")), alternatives))
+            complete = comp.get("complete_alternatives", False)
+            if not isinstance(complete, bool):
+                raise ConfigError(f"config: '{cpath}.complete_alternatives' must be a boolean")
+            components.append(Component(
+                _req(comp, cpath, "name"), bool(_req(comp, cpath, "required")), alternatives, complete
+            ))
         if not components:
             raise ConfigError(f"config: '{path}.components' is empty")
         out[name] = InputSpec(
@@ -548,8 +573,46 @@ def _business(raw: dict) -> Business:
             )
         )
     financing = _req(node, "business", "financing_receivables")
+    exclusions = []
+    categories = {rule.category for rule in rules if rule.action == "fail"}
+    seen = set()
+    entries = node.get("issuer_exclusions") or []
+    if not isinstance(entries, list):
+        raise ConfigError("config: 'business.issuer_exclusions' must be a list")
+    for index, entry in enumerate(entries):
+        path = f"business.issuer_exclusions[{index}]"
+        if not isinstance(entry, dict):
+            raise ConfigError(f"config: '{path}' must be a mapping")
+        cik = _req(entry, path, "cik")
+        if isinstance(cik, bool) or not isinstance(cik, int) or cik <= 0 or cik in seen:
+            raise ConfigError(f"config: '{path}.cik' must be a unique positive integer")
+        seen.add(cik)
+        category = _req(entry, path, "category")
+        if category not in categories:
+            raise ConfigError(f"config: '{path}.category' must be an existing prohibited category")
+        values = []
+        for key in ("reason", "reviewer"):
+            value = _req(entry, path, key)
+            if not isinstance(value, str) or not value.strip():
+                raise ConfigError(f"config: '{path}.{key}' must be nonempty text")
+            values.append(value.strip())
+        sources = _req(entry, path, "sources")
+        if not isinstance(sources, list) or not sources or any(
+            not isinstance(url, str) or urlparse(url).scheme != "https" or not urlparse(url).hostname
+            for url in sources
+        ):
+            raise ConfigError(f"config: '{path}.sources' must list HTTPS evidence URLs")
+        try:
+            reviewed = date.fromisoformat(str(_req(entry, path, "reviewed_on")))
+            expires = date.fromisoformat(str(_req(entry, path, "expires_on")))
+        except ValueError:
+            raise ConfigError(f"config: '{path}' needs valid review and expiry dates") from None
+        if expires <= reviewed:
+            raise ConfigError(f"config: '{path}.expires_on' must be after reviewed_on")
+        exclusions.append(IssuerExclusion(cik, category, values[0], tuple(sources), values[1], reviewed, expires))
     return Business(
-        required, tuple(rules), _number(financing, "business.financing_receivables", "max_share_of_assets")
+        required, tuple(rules), _number(financing, "business.financing_receivables", "max_share_of_assets"),
+        tuple(exclusions),
     )
 
 

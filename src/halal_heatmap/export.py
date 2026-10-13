@@ -335,6 +335,10 @@ def build_site(
 ) -> dict[str, Any]:
     """The three payloads, keyed by file name. Pure except for the price source, when one is given."""
     labels = reviewer_labels(overrides)
+    # Issuer evidence reviews are also part of public reason strings. Never expose
+    # their internal reviewer identities through a business rule or change record.
+    issuer_reviewers = sorted({entry.reviewer for entry in cfg.business.issuer_exclusions})
+    labels.update({name: f"Reviewer {index}" for index, name in enumerate(issuer_reviewers, start=1)})
     by_id = {override.id: override for override in overrides.values()}
     snapshot = store.latest_snapshot()
     snapshot_date, members = snapshot if snapshot else (None, {})

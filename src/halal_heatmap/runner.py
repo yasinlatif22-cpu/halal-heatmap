@@ -37,6 +37,7 @@ RETRY = "retry"
 NEW_FILING = "new_filing"
 EVENT_FILING = "event_filing"
 OVERRIDE_CHANGE = "override_change"
+BUSINESS_EVIDENCE_CHANGE = "business_evidence_change"
 # Notes that mean a source could not be read, as opposed to a company not reporting something.
 SOURCE_NOTES = ("filing", "prices", "sic", "filing_xbrl", "predecessor", "events", "filing_lag")
 # A filing EDGAR lists but companyfacts does not serve yet. Expected for a few days after each
@@ -254,6 +255,12 @@ def detect_due(
             due[ticker] = METHODOLOGY_CHANGE
         elif last["source_failed"] or last["latest_filing_accessions"] is None:
             due[ticker] = RETRY
+        elif any(
+            exclusion.cik == constituent.cik
+            and exclusion.state_on(date.fromisoformat(last["screen_date"])) != exclusion.state_on(as_of)
+            for exclusion in cfg.business.issuer_exclusions
+        ):
+            due[ticker] = BUSINESS_EVIDENCE_CHANGE
         if ticker in due:
             continue
         periodic, reports, _, missing = company_filings(filings, constituent, as_of, cfg)

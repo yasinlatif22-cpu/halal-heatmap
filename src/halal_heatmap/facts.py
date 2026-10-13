@@ -293,7 +293,7 @@ def resolve_input(cf: CompanyFacts, spec: InputSpec, end: date, periods: Periods
                     parts = ttm_facts(cf, tag, end, periods)
                     if parts:
                         reported.append((ttm_value(parts), parts))
-            if reported:
+            if reported and (not comp.complete_alternatives or len(reported) == len(alternative)):
                 candidates.append(reported)
                 if spec.combine == "first":
                     break
@@ -306,7 +306,7 @@ def resolve_input(cf: CompanyFacts, spec: InputSpec, end: date, periods: Periods
                     for tag in alternative
                 ]
                 reported = [(f.value, [("annual_fallback", f)]) for f in annual if f is not None]
-                if reported:
+                if reported and (not comp.complete_alternatives or len(reported) == len(alternative)):
                     candidates.append(reported)
                     if spec.combine == "first":
                         break
