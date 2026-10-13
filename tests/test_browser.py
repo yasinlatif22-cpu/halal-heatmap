@@ -52,13 +52,12 @@ def page():
 def _open(page, url, whole=True):
     page.goto(url)
     page.wait_for_selector("#treemap .slicetext")
-    # Plotly can render duplicate text nodes for patterns. Count distinct labels and
-    # wait for every label in the loaded trace, independent of the export's size.
+    # On narrow screens Plotly deliberately suppresses small labels. Verify that
+    # every node has a rendered surface rather than requiring every label to be visible.
     page.wait_for_function("""() => {
         const chart = document.getElementById('treemap');
-        const labels = chart.data?.[0]?.labels;
-        const rendered = new Set([...chart.querySelectorAll('.slicetext')].map(el => el.textContent));
-        return labels?.length > 0 && labels.every(label => rendered.has(label)) && rendered.size === labels.length;
+        const ids = chart.data?.[0]?.ids;
+        return ids?.length > 0 && chart.querySelectorAll('g.slice > path.surface').length === ids.length;
     }""")
     if not whole:
         page.wait_for_function("document.getElementById('count').textContent.length > 0")
