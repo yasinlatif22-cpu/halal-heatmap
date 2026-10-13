@@ -18,7 +18,6 @@ import pytest
 sync_api = pytest.importorskip("playwright.sync_api")
 
 WEB = Path(__file__).resolve().parents[1] / "web"
-WHOLE_MAP_LABELS = 1030  # every constituent on the map, plus the sector and root labels
 
 
 class _Quiet(http.server.SimpleHTTPRequestHandler):
@@ -53,14 +52,24 @@ def page():
 def _open(page, url, whole=True):
     page.goto(url)
     page.wait_for_selector("#treemap .slicetext")
-    if whole:
-        page.wait_for_function(f"document.querySelectorAll('#treemap .slicetext').length === {WHOLE_MAP_LABELS}")
-    else:
+    # Plotly can render duplicate text nodes for patterns. Count distinct labels and
+    # wait for every label in the loaded trace, independent of the export's size.
+    page.wait_for_function("""() => {
+        const chart = document.getElementById('treemap');
+        const labels = chart.data?.[0]?.labels;
+        const rendered = new Set([...chart.querySelectorAll('.slicetext')].map(el => el.textContent));
+        return labels?.length > 0 && labels.every(label => rendered.has(label)) && rendered.size === labels.length;
+    }""")
+    if not whole:
         page.wait_for_function("document.getElementById('count').textContent.length > 0")
 
 
 def _labels(page):
-    return page.eval_on_selector_all("#treemap .slicetext", "els => els.length")
+    return page.eval_on_selector_all("#treemap .slicetext", "els => new Set(els.map(el => el.textContent)).size")
+
+
+def _trace_labels(page):
+    return page.evaluate("document.getElementById('treemap').data[0].labels.length")
 
 
 def _drawer_open(page):
@@ -98,20 +107,23 @@ def test_tools_are_hidden_by_default_and_the_map_does_not_move(site, page):
 
 def test_leaf_click_opens_the_stock_and_keeps_the_whole_map(site, page):
     _open(page, f"{site}/tool/")
+    whole_map_labels = _trace_labels(page)
     point = _point(page, "NVDA")
     page.mouse.click(point["x"], point["y"])
     page.wait_for_function("document.querySelector('#detail h2')?.textContent.includes('NVDA')")
-    page.wait_for_function(f"document.querySelectorAll('#treemap .slicetext').length === {WHOLE_MAP_LABELS}")
-    assert _labels(page) == WHOLE_MAP_LABELS
+    page.wait_for_function("""expected => new Set([...document.querySelectorAll('#treemap .slicetext')]
+        .map(el => el.textContent)).size === expected""", arg=whole_map_labels)
+    assert _labels(page) == whole_map_labels
     assert _drawer_open(page)
 
 
 def test_sector_click_keeps_the_sector_view_fixed_to_the_whole_map(site, page):
     _open(page, f"{site}/tool/")
+    whole_map_labels = _trace_labels(page)
     point = _point(page, "Information Technology", sector=True)
     page.mouse.click(point["x"], point["y"])
     page.wait_for_timeout(300)
-    assert _labels(page) == WHOLE_MAP_LABELS
+    assert _labels(page) == whole_map_labels
 
 
 def test_hover_names_the_company_on_the_status_line(site, page):
@@ -166,13 +178,15 @@ def test_all_sectors_is_the_default_overview(site, page):
 
 
 def test_sector_link_reveals_the_tools_and_scopes_the_map(site, page):
+    _open(page, f"{site}/tool/")
+    whole_map_labels = _trace_labels(page)
     _open(page, f"{site}/tool/?sector=Financials", whole=False)
     assert _drawer_open(page)
     assert page.input_value("#sector") == "Financials"
     page.wait_for_function("document.getElementById('count').textContent.includes('in Financials')")
     assert "Information Technology" not in page.eval_on_selector_all(
         "#treemap .slicetext", "els => els.map((e) => e.textContent)")
-    assert _labels(page) < WHOLE_MAP_LABELS
+    assert _labels(page) < whole_map_labels
 
 
 def test_choosing_a_sector_writes_the_url_and_All_clears_it(site, page):

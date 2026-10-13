@@ -79,7 +79,7 @@ def filing_url(cik: int | None, accession: str | None) -> str | None:
 def _confidence(key: str) -> str:
     if key == "none":
         return "none"
-    return "standard" if key == "disclosed" else "lower"
+    return "lower" if key in {"upper_bound_cash", "upper_bound_total_assets"} else "standard"
 
 
 def _interest_basis(row) -> dict:
@@ -111,8 +111,8 @@ def _interest_basis(row) -> dict:
         }
     return {
         "key": key,
-        # Only disclosed gross interest is standard. Every other basis is lower confidence: a ceiling
-        # from the balance sheet, a net or partial figure, or one from an older annual filing.
+        # Lower confidence means no interest income was disclosed. Annual, net and partial
+        # figures retain their distinct basis labels without joining the upper-bound category.
         "confidence": _confidence(key),
         "value": row["interest_income"],
         "source": row["interest_income_source"],
@@ -355,7 +355,12 @@ def build_site(
 
     daily, failed = {}, []
     if prices is not None:
-        daily, failed = daily_changes(prices, [(s["ticker"], date.fromisoformat(s["screen_date"])) for s in screens])
+        # Removed constituents remain in the audit history, but their prices may no longer
+        # be available. Only stocks in the current index need a price change for the site.
+        daily, failed = daily_changes(
+            prices,
+            [(s["ticker"], date.fromisoformat(s["screen_date"])) for s in screens if s["in_index"]],
+        )
         for screen in screens:
             screen["daily_change"] = daily.get(screen["ticker"])
 
