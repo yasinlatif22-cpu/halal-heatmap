@@ -104,25 +104,39 @@ def test_tools_are_hidden_by_default_and_the_map_does_not_move(site, page):
     assert page.locator("#treemap").bounding_box() == before
 
 
+def _track_drilldown_animation(page):
+    page.evaluate("""() => {
+        window.drilldownFrames = [];
+        document.getElementById('treemap').on('plotly_animatingframe', event => {
+            window.drilldownFrames.push(event.name ?? 'frame');
+        });
+    }""")
+
+
 def test_leaf_click_opens_the_stock_and_keeps_the_whole_map(site, page):
     _open(page, f"{site}/tool/")
     whole_map_labels = _trace_labels(page)
     point = _point(page, "NVDA")
+    _track_drilldown_animation(page)
     page.mouse.click(point["x"], point["y"])
     page.wait_for_function("document.querySelector('#detail h2')?.textContent.includes('NVDA')")
     page.wait_for_function("""expected => new Set([...document.querySelectorAll('#treemap .slicetext')]
         .map(el => el.textContent)).size === expected""", arg=whole_map_labels)
     assert _labels(page) == whole_map_labels
     assert _drawer_open(page)
+    page.wait_for_timeout(300)
+    assert page.evaluate("window.drilldownFrames") == []
 
 
 def test_sector_click_keeps_the_sector_view_fixed_to_the_whole_map(site, page):
     _open(page, f"{site}/tool/")
     whole_map_labels = _trace_labels(page)
     point = _point(page, "Information Technology", sector=True)
+    _track_drilldown_animation(page)
     page.mouse.click(point["x"], point["y"])
     page.wait_for_timeout(300)
     assert _labels(page) == whole_map_labels
+    assert page.evaluate("window.drilldownFrames") == []
 
 
 def test_hover_names_the_company_on_the_status_line(site, page):

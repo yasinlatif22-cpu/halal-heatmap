@@ -322,18 +322,13 @@
       await Plotly.react(el.treemap, [trace], layout, config);
       if (plotBound) return;
       plotBound = true;
-      el.treemap.on('plotly_click', (ev) => {
+      // Cancel the treemap's default drill-down before it starts an animation.
+      // The generic plotly_click event runs too late to prevent the colour flash.
+      el.treemap.on('plotly_treemapclick', (ev) => {
         const point = ev.points && ev.points[0];
-        if (!point) return;
-        const id = point.data.ids[point.pointNumber];
-        // Plotly drills into any node it is clicked on. The map is kept whole, so reset the view on every click; a leaf
-        // click then opens its stock. Plotly applies its own drill-down after this handler returns, so reset on the next tick.
-        setTimeout(() => {
-          Promise.resolve().then(() => Plotly.restyle(el.treemap, { level: 'all' }))
-            .catch((error) => showError('The heatmap could not be updated. Reload to try again.', error));
-        }, 0);
-        if (DISPLAY || !byTicker.has(id)) return;
-        openDetail(id);
+        const id = point && point.data.ids[point.pointNumber];
+        if (!DISPLAY && byTicker.has(id)) openDetail(id);
+        return false;
       });
       el.treemap.on('plotly_hover', (ev) => {
         const point = ev.points && ev.points[0];
