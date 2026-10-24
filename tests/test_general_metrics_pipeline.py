@@ -74,3 +74,21 @@ def test_a_result_without_fundamentals_is_screened_again_so_old_data_gains_metri
     due, _ = detect_due(AS_OF, old_cfg, [COMPANY], Filings(document()), {}, store)
     assert due == {COMPANY.ticker: METRICS_BACKFILL}
     store.close()
+
+
+def test_the_coverage_script_counts_resolved_and_missing_metrics(cfg):
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "verify_fundamentals", Path(__file__).parent.parent / "scripts" / "verify_fundamentals.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    full, _ = run(cfg, document(**EXTRA))
+    bare, _ = run(cfg, document())
+    records = [result_to_record(full, cfg), result_to_record(bare, cfg)]
+    records[1] = {**records[1], "ticker": "BARE"}
+    result = module.coverage(records)
+    assert result["roe"]["resolved"] == ["TEST"] and result["roe"]["missing"] == ["BARE"]
+    assert result["debt_to_market_cap"]["resolved"] == ["TEST", "BARE"]
