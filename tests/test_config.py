@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from halal_heatmap.config import ConfigError, load_config, methodology, parse_config
-from halal_heatmap.overrides import parse_overrides
+from equity_screener.config import ConfigError, load_config, methodology, parse_config
+from equity_screener.overrides import parse_overrides
 
 ROOT = Path(__file__).resolve().parents[1]
-SRC = ROOT / "src" / "halal_heatmap"
+SRC = ROOT / "src" / "equity_screener"
 
 
 def test_repo_config_loads_with_decided_defaults():
@@ -100,6 +100,7 @@ NOT_IN_HASH = {  # and filings.companyfacts_lag_days
     "schedule",
     "constituents",
     "near_threshold",
+    "fundamentals",  # inputs for the general metrics; no screening verdict reads them
 }
 
 
@@ -283,3 +284,16 @@ def test_publish_and_price_settings_are_validated(raw, section, key, value):
     raw[section][key] = value
     with pytest.raises(ConfigError):
         parse_config(raw)
+
+
+def test_fundamentals_do_not_change_the_methodology_hash(raw):
+    from equity_screener.config import config_hash
+
+    changed = {**raw, "fundamentals": {}}
+    assert config_hash(changed) == config_hash(raw)
+
+
+def test_fundamentals_are_parsed_with_the_same_rules_as_inputs(cfg):
+    assert {"net_income", "operating_income", "stockholders_equity"} <= set(cfg.fundamentals)
+    assert cfg.fundamentals["net_income"].period == "ttm"
+    assert cfg.fundamentals["stockholders_equity"].period == "instant"

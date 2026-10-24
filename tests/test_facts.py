@@ -3,8 +3,8 @@ from datetime import date, timedelta
 import pytest
 
 from conftest import companyfacts, fact
-from halal_heatmap.config import TagRef
-from halal_heatmap.facts import (
+from equity_screener.config import TagRef
+from equity_screener.facts import (
     CompanyFacts,
     find_anchor,
     has_recent_facts,

@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from halal_heatmap.cli import main
-from halal_heatmap.config import parse_config
-from halal_heatmap.gates import check_prices, check_run, check_warnings
-from halal_heatmap.runner import run_screen, update
-from halal_heatmap.sources import SourceError
-from halal_heatmap.store import Store
+from equity_screener.cli import main
+from equity_screener.config import parse_config
+from equity_screener.gates import check_prices, check_run, check_warnings
+from equity_screener.runner import run_screen, update
+from equity_screener.sources import SourceError
+from equity_screener.store import Store
 from test_export import ALL, OVR, Prices, world  # noqa: F401  (fixtures and fixture helpers)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -237,7 +237,7 @@ def test_export_writes_nothing_when_a_close_is_missing(world, raw, tmp_path, mon
     store = Store(str(db))
     run_screen(date(2026, 8, 3), cfg, world.constituents(*ALL), world, world, OVR, store)
     store.close()
-    monkeypatch.setattr("halal_heatmap.cli._prices_from", lambda cfg: FlakyPrices(Prices({}), failing={"DEBT"}))
+    monkeypatch.setattr("equity_screener.cli._prices_from", lambda cfg: FlakyPrices(Prices({}), failing={"DEBT"}))
     assert main(export_args(db, out)) == 1
     assert "nothing written" in capsys.readouterr().err
     assert not out.exists()
@@ -250,7 +250,7 @@ def test_export_writes_the_site_when_every_close_is_read(world, raw, tmp_path, m
     store = Store(str(db))
     run_screen(date(2026, 8, 3), cfg, world.constituents(*ALL), world, world, OVR, store)
     store.close()
-    monkeypatch.setattr("halal_heatmap.cli._prices_from", lambda cfg: Prices({}))
+    monkeypatch.setattr("equity_screener.cli._prices_from", lambda cfg: Prices({}))
     assert main(export_args(db, out)) == 0
     assert (out / "screens.json").exists() and (out / "meta.json").exists()
 

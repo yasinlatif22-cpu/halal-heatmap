@@ -4,11 +4,11 @@ from datetime import date, timedelta
 import pytest
 
 from conftest import SCREEN_DATE, caps, make_inputs
-from halal_heatmap.config import DENOMINATORS, ConfigError, TagRef, parse_config
-from halal_heatmap.facts import Fact
-from halal_heatmap.overrides import Override
-from halal_heatmap.screen.engine import result_to_record, screen
-from halal_heatmap.store import RESULT_COLUMNS
+from equity_screener.config import DENOMINATORS, ConfigError, TagRef, parse_config
+from equity_screener.facts import Fact
+from equity_screener.overrides import Override
+from equity_screener.screen.engine import result_to_record, screen
+from equity_screener.store import RESULT_COLUMNS
 
 REVIEW = dict(sic="5812", gics_sub_industry="Restaurants")
 BANK = dict(sic="6021", gics_sub_industry="Diversified Banks")

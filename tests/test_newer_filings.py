@@ -5,12 +5,12 @@ own filing cadence. Fake sources only; the shapes follow PPG (read from its XBRL
 from datetime import date, timedelta
 
 from conftest import companyfacts, fact
-from halal_heatmap.config import parse_config
-from halal_heatmap.filings import FilingEntry
-from halal_heatmap.pipeline import _newer_and_due, screen_constituent
-from halal_heatmap.sources import SourceError
-from halal_heatmap.sources.prices import PriceHistory
-from halal_heatmap.sources.wikipedia import Constituent
+from equity_screener.config import parse_config
+from equity_screener.filings import FilingEntry
+from equity_screener.pipeline import _newer_and_due, screen_constituent
+from equity_screener.sources import SourceError
+from equity_screener.sources.prices import PriceHistory
+from equity_screener.sources.wikipedia import Constituent
 
 AS_OF = date(2026, 10, 1)
 COMPANY = Constituent("TEST", "Test Corp", "Information Technology", "Semiconductors", 1234)

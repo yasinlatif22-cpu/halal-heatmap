@@ -1,9 +1,9 @@
 import pytest
 
-from halal_heatmap.config import ConfigError
-from halal_heatmap.sources import SourceError
-from halal_heatmap.sources.edgar import EdgarClient, RateLimiter, instance_name
-from halal_heatmap.sources.wikipedia import parse_constituents
+from equity_screener.config import ConfigError
+from equity_screener.sources import SourceError
+from equity_screener.sources.edgar import EdgarClient, RateLimiter, instance_name
+from equity_screener.sources.wikipedia import parse_constituents
 
 
 class FakeResponse:
@@ -213,7 +213,7 @@ import sys  # noqa: E402
 import types  # noqa: E402
 from datetime import date, datetime  # noqa: E402
 
-from halal_heatmap.sources.prices import YFinancePrices  # noqa: E402
+from equity_screener.sources.prices import YFinancePrices  # noqa: E402
 
 
 class _Frame:
@@ -306,7 +306,7 @@ def test_a_stray_pipe_after_a_name_is_not_part_of_the_name(cfg):
 
 
 def test_clean_name_keeps_real_punctuation():
-    from halal_heatmap.sources.wikipedia import clean_name
+    from equity_screener.sources.wikipedia import clean_name
 
     assert clean_name("Brown–Forman") == "Brown–Forman"
     assert clean_name("Estée Lauder Companies (The)") == "Estée Lauder Companies (The)"

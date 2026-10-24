@@ -1,0 +1,5 @@
+name: Valuation screen
+description: Positive earnings at a moderate earnings multiple and free cash flow yield. Illustrative thresholds, not a recommendation.
+criteria:
+  - {metric: price_to_earnings, op: "<", value: 20}
+  - {metric: fcf_yield, op: ">", value: 0.04}

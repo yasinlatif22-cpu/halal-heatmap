@@ -1,0 +1,6 @@
+name: Low leverage and low cash balance
+description: Debt and cash each below 30% of market cap and interest income below 5% of revenue. Reproduces the ratio limits of the project's original reference screen (see docs/legacy-reference-screen.md).
+criteria:
+  - {metric: debt_to_market_cap, op: "<", value: 0.30}
+  - {metric: cash_to_market_cap, op: "<", value: 0.30}
+  - {metric: interest_income_to_revenue, op: "<", value: 0.05}

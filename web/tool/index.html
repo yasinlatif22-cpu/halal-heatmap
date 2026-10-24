@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Mirsad: S&amp;P 500 Shariah screen</title>
-  <meta name="description" content="Automated AAOIFI-based Shariah screen of S&amp;P 500 stocks. Not a fatwa and not investment advice.">
-  <meta property="og:title" content="Mirsad: S&amp;P 500 Shariah screen">
-  <meta property="og:description" content="Automated AAOIFI-based Shariah screen of S&amp;P 500 stocks. Not a fatwa and not investment advice.">
+  <title>Equity Screener: S&amp;P 500 fundamentals</title>
+  <meta name="description" content="Screen S&amp;P 500 stocks on reported fundamentals with editable criteria. Research tool, not investment advice.">
+  <meta property="og:title" content="Equity Screener: S&amp;P 500 fundamentals">
+  <meta property="og:description" content="Screen S&amp;P 500 stocks on reported fundamentals with editable criteria. Research tool, not investment advice.">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
@@ -16,7 +16,7 @@
 <body>
   <header class="top">
     <div class="bar1">
-      <h1 class="wordmark"><span class="mark-tiles" aria-hidden="true"><i class="s-pass"></i><i class="s-review"></i><i class="s-fail"></i><i class="s-insuf"></i></span><span>Mirsad</span></h1>
+      <h1 class="wordmark"><span class="mark-tiles" aria-hidden="true"><i class="s-pass"></i><i class="s-review"></i><i class="s-fail"></i><i class="s-insuf"></i></span><span>Equity Screener</span></h1>
       <div class="cmd" role="search">
         <span class="prompt" aria-hidden="true">&gt;</span>
         <label class="visually-hidden" for="q">Ticker or company name</label>
@@ -58,20 +58,38 @@
       </div>
 
       <form id="controls" class="filters" onsubmit="return false">
+        <fieldset class="group view">
+          <legend>View</legend>
+          <div class="field"><label for="view-mode">Colour the map by</label>
+            <select id="view-mode">
+              <option value="profile">Screening criteria (pass / fail)</option>
+              <option value="metric">One metric (heatmap)</option>
+              <option value="reference">Reference ratio screen (config.yaml)</option>
+            </select></div>
+          <div class="field" id="view-profile-wrap"><label for="view-profile">Criteria profile</label>
+            <select id="view-profile"></select>
+            <p class="muted" id="view-description"></p>
+            <div id="criteria-editor" class="criteria-editor"></div>
+            <button type="button" class="link" id="add-criterion">Add criterion</button>
+            <button type="button" class="link" id="reset-criteria">Reset to profile</button></div>
+          <div class="field" id="view-metric-wrap" hidden><label for="view-metric">Metric</label>
+            <select id="view-metric"></select></div>
+          <p class="muted" id="view-reference-note" hidden>The ratio limits and industry exclusions defined in config.yaml, with the data-quality flags below. Statuses here do not depend on the profiles above.</p>
+        </fieldset>
         <div class="field sector-field">
           <label for="sector">Sector</label>
           <select id="sector"><option value="all">All sectors</option></select>
         </div>
-        <fieldset class="group">
-          <legend>Status</legend>
+        <fieldset class="group status-filter">
+          <legend>Result</legend>
           <label><input type="checkbox" name="status" value="pass" checked> Pass</label>
           <label><input type="checkbox" name="status" value="needs_review" checked> Needs review</label>
           <label><input type="checkbox" name="status" value="fail" checked> Fail</label>
           <label><input type="checkbox" name="status" value="insufficient_data" checked> Insufficient data</label>
         </fieldset>
         <label class="near"><input type="checkbox" id="near-only"> Near a limit only</label>
-        <details class="more">
-          <summary>Basis of interest income and flags</summary>
+        <details class="more reference-only">
+          <summary>Interest income basis and data-quality flags</summary>
           <div class="more-body">
             <fieldset class="group">
               <legend>Basis of interest income</legend>
@@ -111,7 +129,8 @@
           <label class="sort-label">Sort <select id="sort">
             <option value="watch">Watchlist first, then ticker</option>
             <option value="ticker">Ticker</option>
-            <option value="status">Status</option>
+            <option value="status">Result</option>
+            <option value="metric">Active metric (high to low)</option>
             <option value="cap">Market cap</option>
             <option value="change">Last-close price change</option>
           </select></label>
@@ -121,15 +140,7 @@
         <div class="table-scroll">
           <table class="stock-table">
             <thead>
-              <tr>
-                <th scope="col"><span class="visually-hidden">Pin</span></th>
-                <th scope="col">Ticker</th>
-                <th scope="col">Company</th>
-                <th scope="col">Status</th>
-                <th scope="col">Near limit</th>
-                <th scope="col">Basis</th>
-                <th scope="col" class="num">Last-close change</th>
-              </tr>
+              <tr id="list-head"></tr>
             </thead>
             <tbody id="list-body"></tbody>
           </table>
@@ -148,7 +159,7 @@
   <footer class="foot">
     <div class="wrap">
       <p class="disclaimer" id="disclaimer"></p>
-      <p class="aid">Research aid: not a ruling, not certification, not investment advice. Each stock is screened with one published methodology, set out in the README.</p>
+      <p class="aid">Research tool, not investment advice. Metrics follow the published methodology in the README; criteria edits are applied in this browser only.</p>
       <div class="foot-grid">
       <details class="unsized" id="unsized" hidden>
         <summary><span id="unsized-count">0</span> stocks have no market cap and are left off the map</summary>
@@ -161,7 +172,7 @@
         </div>
       </details>
         <div>
-          <h3>Thresholds</h3>
+          <h3>Active criteria</h3>
           <ul id="thresholds"></ul>
           <p id="near-desc" class="muted"></p>
         </div>
@@ -178,7 +189,7 @@
           <ul>
             <li>Constituents come from Wikipedia. Filings come from SEC EDGAR. Prices come from yfinance, an unofficial source.</li>
             <li>Company names and marks belong to their owners. No affiliation is implied.</li>
-            <li>Marks on tiles: ✓ pass, ? review, ✕ fail, – insufficient. Outline: within the margin of a limit. ! balance sheet out of date. Other marks are in the detail panel.</li>
+            <li>Marks on tiles: ✓ meets criteria, ✕ fails a criterion, – metric unavailable (in the reference view, ? is needs review and an outline is within the margin of a limit). ! balance sheet out of date.</li>
           </ul>
         </div>
       </div>
@@ -186,7 +197,7 @@
   </footer>
 
   <div class="status" id="status-line" role="status">
-    <span class="live">Live export</span>
+    <span class="live">Data export</span>
     <span>As of <b id="status-asof">—</b></span>
     <span class="src">Source <b>SEC EDGAR · Wikipedia · yfinance (unofficial)</b></span>
     <span class="hover" id="status-hover"></span>
@@ -194,6 +205,7 @@
   </div>
 
   <script src="../vendor/plotly.min.js"></script>
+  <script src="criteria.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

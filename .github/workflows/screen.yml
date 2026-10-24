@@ -2,7 +2,7 @@ name: screen and publish
 
 # Runs `update`, which screens whatever is due: every constituent on the monthly date, otherwise only
 # companies with a new filing, a new 8-K event, a changed config or a fetch to retry. The results are
-# published only if the publish gates pass (src/halal_heatmap/gates.py). A failed gate fails this job
+# published only if the publish gates pass (src/equity_screener/gates.py). A failed gate fails this job
 # and nothing from that run reaches the site or the data branch.
 #
 # The database lives on the orphan `data` branch as screens.db.gz. It is saved only when a run stores
@@ -34,7 +34,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: halal-heatmap-publish
+  group: equity-screener-publish
   cancel-in-progress: false
 
 jobs:
@@ -83,7 +83,7 @@ jobs:
       - name: Screen what is due
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
-        run: halal-heatmap update --summary-json "$RUNNER_TEMP/run.json"
+        run: equity-screener update --summary-json "$RUNNER_TEMP/run.json"
 
       - name: Check the publish gates
         id: gates
@@ -93,14 +93,14 @@ jobs:
           set -euo pipefail
           args=()
           if [ "$ACCEPT_STATUS_CHANGES" = "true" ]; then args+=(--accept-status-changes); fi
-          halal-heatmap check-run "$RUNNER_TEMP/run.json" "${args[@]}"
+          equity-screener check-run "$RUNNER_TEMP/run.json" "${args[@]}"
           echo "stored=$(jq -r '.stored' "$RUNNER_TEMP/run.json")" >> "$GITHUB_OUTPUT"
 
       # Export, package and deploy run on a stored run, or on a forced one. Each condition has no status function,
       # so GitHub still skips them when a gate fails: the gates step is the only one with no condition.
       - name: Export the site data
         if: steps.gates.outputs.stored == 'true' || inputs.force_publish
-        run: halal-heatmap export
+        run: equity-screener export
 
       # Reads of the data branch are unauthenticated: the repository is public. Only the push below has a token.
       - name: Commit the database to the data branch

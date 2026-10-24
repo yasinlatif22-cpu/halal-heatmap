@@ -1,5 +1,7 @@
-# Every screening parameter lives in this file. Nothing in src/ hardcodes a threshold.
-# Items marked VERIFY are the ones to check against the current AAOIFI standard.
+# Every parameter of the reference ratio screen lives in this file. Nothing in src/ hardcodes a threshold.
+# The reference screen (the `screens:` limits plus the `business:` exclusion list) is one configuration of the
+# engine. The metrics and the editable criteria profiles in profiles/ do not depend on it.
+# Items marked VERIFY are values taken from a secondary source that have not been checked against a primary text.
 #
 # Every result stores a hash of this file as its methodology version. The hash leaves out the
 # settings that cannot change a verdict: edgar, schedule, constituents and
@@ -409,7 +411,7 @@ business:
 
 constituents:
   url: "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-  user_agent: "halal-heatmap/0.1 (S&P 500 constituent reader)"
+  user_agent: "equity-screener/0.1 (S&P 500 constituent reader)"
   table_id: constituents
   min_count: 490
   max_count: 520
@@ -444,3 +446,63 @@ publish:
   # this, check-run prints a warning. It does not stop the publish, because a batch of recent filings
   # is normal; a long-lived one points at a companyfacts problem.
   max_lagging_share: 0.10
+
+# Extra inputs for the general financial metrics (profitability, returns, leverage, cash flow).
+# They use the same resolution rules as `inputs` above. No screening verdict reads them, so they
+# are left out of the methodology hash. Tag lists are first-match alternatives, most specific first.
+# Tag availability varies by company and filing year; a metric whose input cannot be resolved is
+# reported as unavailable, never estimated.
+fundamentals:
+  net_income:
+    period: ttm
+    combine: first
+    components:
+      - name: net_income
+        required: true
+        any_of:
+          - [NetIncomeLoss]
+          - [ProfitLoss]
+          - [NetIncomeLossAvailableToCommonStockholdersBasic]
+  operating_income:
+    period: ttm
+    combine: first
+    components:
+      - name: operating_income
+        required: true
+        any_of:
+          - [OperatingIncomeLoss]
+  gross_profit:
+    period: ttm
+    combine: first
+    components:
+      - name: gross_profit
+        required: true
+        any_of:
+          - [GrossProfit]
+  operating_cash_flow:
+    period: ttm
+    combine: first
+    components:
+      - name: operating_cash_flow
+        required: true
+        any_of:
+          - [NetCashProvidedByUsedInOperatingActivities]
+          - [NetCashProvidedByUsedInOperatingActivitiesContinuingOperations]
+  capital_expenditures:
+    period: ttm
+    combine: first
+    components:
+      - name: capital_expenditures
+        required: true
+        any_of:
+          - [PaymentsToAcquirePropertyPlantAndEquipment]
+          - [PaymentsToAcquireProductiveAssets]
+  stockholders_equity:
+    period: instant
+    combine: first
+    components:
+      - name: stockholders_equity
+        required: true
+        any_of:
+          - [StockholdersEquity]
+          - [StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest]

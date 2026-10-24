@@ -8,10 +8,10 @@ from datetime import date
 import pytest
 
 from conftest import companyfacts, fact, make_inputs, trading_days
-from halal_heatmap.cli import format_record
-from halal_heatmap.config import ConfigError, parse_config
-from halal_heatmap.facts import CompanyFacts, merge_company_facts
-from halal_heatmap.filings import (
+from equity_screener.cli import format_record
+from equity_screener.config import ConfigError, parse_config
+from equity_screener.facts import CompanyFacts, merge_company_facts
+from equity_screener.filings import (
     FilingEntry,
     class_share_counts,
     extension_tags,
@@ -19,15 +19,15 @@ from halal_heatmap.filings import (
     instance_documents,
     list_filings,
 )
-from halal_heatmap.interest import FilingViews, resolve_interest_income
-from halal_heatmap.marketcap import daily_class_market_caps
-from halal_heatmap.pipeline import screen_constituent
-from halal_heatmap.screen.engine import result_to_record, screen
-from halal_heatmap.sources import SourceError
-from halal_heatmap.sources.prices import PriceHistory
-from halal_heatmap.sources.wikipedia import Constituent
-from halal_heatmap.store import RESULT_COLUMNS, Store
-from halal_heatmap.xbrl import InstanceError, parse_instance
+from equity_screener.interest import FilingViews, resolve_interest_income
+from equity_screener.marketcap import daily_class_market_caps
+from equity_screener.pipeline import screen_constituent
+from equity_screener.screen.engine import result_to_record, screen
+from equity_screener.sources import SourceError
+from equity_screener.sources.prices import PriceHistory
+from equity_screener.sources.wikipedia import Constituent
+from equity_screener.store import RESULT_COLUMNS, Store
+from equity_screener.xbrl import InstanceError, parse_instance
 
 AS_OF = date(2026, 10, 1)
 Q2_END = "2026-06-30"
