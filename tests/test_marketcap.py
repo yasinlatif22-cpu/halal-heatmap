@@ -3,9 +3,9 @@ from datetime import date, timedelta
 import pytest
 
 from conftest import trading_days
-from halal_heatmap.config import TagRef
-from halal_heatmap.facts import Fact, ShareCount
-from halal_heatmap.marketcap import (
+from equity_screener.config import TagRef
+from equity_screener.facts import Fact, ShareCount
+from equity_screener.marketcap import (
     add_months,
     check_share_counts,
     compute_market_caps,

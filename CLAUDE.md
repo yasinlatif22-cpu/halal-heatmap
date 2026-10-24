@@ -1,7 +1,7 @@
 # Mirsad
 
 The product is named Mirsad in user-facing text. The repo slug, the Python package, the CLI, the data branch, the workflow
-names, SEC_USER_AGENT and the watchlist storage key are deliberately still halal-heatmap, to be renamed later in a separate step.
+names, SEC_USER_AGENT and the watchlist storage key are deliberately still equity-screener, to be renamed later in a separate step.
 
 A static web tool: a treemap of S&P 500 stocks coloured by the result of an AAOIFI-based Shariah
 screen, with status changes flagged, updated automatically. This file is the working spec and the
@@ -29,7 +29,7 @@ record of decisions. It is an automated screen, not a fatwa and not investment a
 - SQLite rows are append-only. A bad run is marked superseded, not deleted.
 - Rules added as safety checks may only turn a pass into `insufficient_data`; they never move a
   fail or a needs_review. Tests prove this for each one.
-- Screening functions are pure. All network access is in `src/halal_heatmap/sources/`.
+- Screening functions are pure. All network access is in `src/equity_screener/sources/`.
 - A screen for a date reads only filings filed on or before it and closes of trading days before
   it. The screen date's own price is never read: it may be an unfinished trading day.
 - Stored history only moves forward: a date before the latest stored screen is refused.
@@ -43,12 +43,12 @@ record of decisions. It is an automated screen, not a fatwa and not investment a
 ```
 .venv/bin/pytest -q                                   # offline unit tests
 .venv/bin/ruff check src tests
-.venv/bin/halal-heatmap screen AAPL MSFT --facts      # audit records for some tickers
-.venv/bin/halal-heatmap screen --quiet                # full S&P 500 into data/screens.db
-.venv/bin/halal-heatmap update                        # what automation runs: screen whatever is due
-.venv/bin/halal-heatmap changes [TICKER] [--since D]  # stored status changes and index events
-.venv/bin/halal-heatmap supersede-run 4 --reason "…"  # mark a stored run invalid, re-measure changes
-.venv/bin/halal-heatmap export                        # write web/data/*.json from the latest valid screens
+.venv/bin/equity-screener screen AAPL MSFT --facts      # audit records for some tickers
+.venv/bin/equity-screener screen --quiet                # full S&P 500 into data/screens.db
+.venv/bin/equity-screener update                        # what automation runs: screen whatever is due
+.venv/bin/equity-screener changes [TICKER] [--since D]  # stored status changes and index events
+.venv/bin/equity-screener supersede-run 4 --reason "…"  # mark a stored run invalid, re-measure changes
+.venv/bin/equity-screener export                        # write web/data/*.json from the latest valid screens
 python3 -m http.server 8000 --directory web           # then open http://localhost:8000
 ```
 
@@ -254,10 +254,10 @@ different config hashes. History must start from one clean run.
 1. Archive the current database as a backup: `mv data/screens.db data/screens.pre-launch.bak.db`.
    `*.db` is in `.gitignore`; check `git status` shows nothing new.
 2. Confirm `config.yaml` and `overrides.yaml` are the launch versions and committed.
-3. Run `.venv/bin/halal-heatmap update` once. With no database it creates a fresh one and
+3. Run `.venv/bin/equity-screener update` once. With no database it creates a fresh one and
    screens every constituent: this is the first row of history for each ticker.
 4. Check the run: one row in `runs` with scope `full`, about 500 results, no `source:` errors,
-   `halal-heatmap changes` shows 0 status changes and 0 index events.
+   `equity-screener changes` shows 0 status changes and 0 index events.
 5. Run `update` again and confirm "nothing due" and no new rows. Only then schedule it.
 
 ## To verify against the current AAOIFI standard (maintainer)

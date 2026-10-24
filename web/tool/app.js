@@ -1,5 +1,6 @@
-/* Mirsad: draws the exported screens. It computes no verdicts; every number, threshold and
-   label shown here comes from data/screens.json, data/changes.json or data/meta.json. */
+/* Equity Screener: draws the exported screens. Every number comes from data/screens.json, data/changes.json
+   or data/meta.json. The only thing computed here is a pass/fail against criteria the viewer can edit: the
+   same rules as src/equity_screener/criteria.py, via criteria.js. */
 (() => {
   'use strict';
 
@@ -66,6 +67,48 @@
   };
   const STATUS_CHIPS = [['pass', 'Pass', '✓'], ['needs_review', 'Needs review', '?'], ['fail', 'Fail', '✕'], ['insufficient_data', 'Insufficient data', '–']];
   const SMALL = window.matchMedia('(max-width: 960px)');
+  const Crit = window.Criteria;
+  const REFERENCE_LABELS = { pass: 'Pass', needs_review: 'Needs review', fail: 'Fail', insufficient_data: 'Insufficient data' };
+  const CRITERIA_LABELS = { pass: 'Meets all criteria', needs_review: 'Needs review', fail: 'Fails a criterion', insufficient_data: 'Metric unavailable' };
+  // mode: 'profile' (pass/fail against editable criteria), 'metric' (colour by one metric) or 'reference'
+  // (the ratio screen and industry exclusions in config.yaml).
+  const view = { mode: 'profile', profile: null, criteria: [], metric: 'roe', range: null };
+  let catalog = new Map();
+  const st = (s) => {
+    if (view.mode === 'reference') return s.status;
+    const metrics = s.metrics || {};
+    if (view.mode === 'metric') return metrics[view.metric] == null ? 'insufficient_data' : 'pass';
+    return Crit.evaluate(view.criteria, metrics).status;
+  };
+  const metricText = (key, value) => {
+    if (value == null) return 'n/a';
+    const m = catalog.get(key);
+    if (!m) return number(value);
+    if (m.unit === 'ratio') return pct(value, 1);
+    if (m.unit === 'multiple') return `${value.toFixed(1)}x`;
+    return money(value);
+  };
+  const activeMetricKey = () => (view.mode === 'metric' ? view.metric : (view.criteria[0] || {}).metric || 'roe');
+  function setLabels() {
+    const labels = view.mode === 'reference' ? REFERENCE_LABELS : CRITERIA_LABELS;
+    for (const key of Object.keys(STATUS)) STATUS[key].label = labels[key];
+    STATUS_CHIPS.forEach((chip) => { chip[1] = labels[chip[0]]; });
+  }
+  // Colour scale for the metric view: the 5th to 95th percentile of the stocks that have a value, so one outlier
+  // does not wash out the map. Low is dark slate, high is teal.
+  function metricRange() {
+    const values = members.map((s) => (s.metrics || {})[view.metric]).filter((v) => v != null).sort((a, b) => a - b);
+    if (!values.length) return null;
+    const at = (q) => values[Math.min(values.length - 1, Math.floor(q * (values.length - 1)))];
+    return { lo: at(0.05), hi: at(0.95) };
+  }
+  function metricFill(value) {
+    const r = view.range;
+    if (!r || value == null) return UNKNOWN_BG;
+    const t = r.hi === r.lo ? 0.5 : Math.max(0, Math.min(1, (value - r.lo) / (r.hi - r.lo)));
+    const mix = (a, b) => Math.round(a + (b - a) * t);
+    return `rgb(${mix(38, 20)}, ${mix(58, 150)}, ${mix(84, 140)})`;
+  }
 
   const $ = (id) => document.getElementById(id);
   const el = {
@@ -122,7 +165,7 @@
     const s = STATUS[status] || { label: status };
     return `<span class="st st-${esc(status)}">${esc(s.label)}</span>`;
   };
-  const isNear = (s) => NEAR_STATUSES.includes(s.status) && s.near_threshold;
+  const isNear = (s) => view.mode === 'reference' && NEAR_STATUSES.includes(s.status) && s.near_threshold;
   const lowerBasis = (s) => BASIS[s.interest_income.key].confidence === 'lower';
   const flagOn = (s, key) => {
     switch (key) {
@@ -180,10 +223,10 @@
   }
 
   function visible(s) {
-    if (!filters.statuses.has(s.status)) return false;
+    if (view.mode !== 'metric' && !filters.statuses.has(st(s))) return false;
     if (filters.near && !isNear(s)) return false;
-    if (!filters.bases.has(s.interest_income.key)) return false;
-    if (filters.flags.size && ![...filters.flags].some((key) => flagOn(s, key))) return false;
+    if (view.mode === 'reference' && !filters.bases.has(s.interest_income.key)) return false;
+    if (view.mode === 'reference' && filters.flags.size && ![...filters.flags].some((key) => flagOn(s, key))) return false;
     return true;
   }
 
@@ -202,7 +245,10 @@
 
   // The hovered stock is named on the status line, so nothing is drawn over the map.
   function showHover(s) {
-    el.statusHover.textContent = `${s.ticker}  ·  ${STATUS[s.status].label}  ·  ${money(s.spot_market_cap)}`;
+    const result = view.mode === 'metric'
+      ? `${(catalog.get(view.metric) || {}).label || view.metric} ${metricText(view.metric, (s.metrics || {})[view.metric])}`
+      : STATUS[st(s)].label;
+    el.statusHover.textContent = `${s.ticker}  ·  ${result}  ·  ${money(s.spot_market_cap)}`;
   }
   function clearHover() {
     el.statusHover.textContent = '';
@@ -216,7 +262,8 @@
   // On the tile: the ticker, the status glyph and a stale-balance-sheet mark. Near a limit is the outline or hatch.
   function tileLabel(s) {
     const stale = flagOn(s, 'stale') ? ' !' : '';
-    return `${s.ticker} ${STATUS[s.status].symbol}${stale}`;
+    if (view.mode === 'metric') return `${s.ticker} ${metricText(view.metric, (s.metrics || {})[view.metric])}`;
+    return `${s.ticker} ${STATUS[st(s)].symbol}${stale}`;
   }
 
   async function drawTreemap() {
@@ -257,20 +304,22 @@
         bg.push(NEUTRAL);
         solidity.push(0.4);
         for (const s of stocks.filter((x) => x.spot_market_cap != null)) {
+          const status = st(s);
           const near = isNear(s);
-          const hatched = near && s.status === 'needs_review';
-          const unknown = s.status === 'insufficient_data';
+          const hatched = near && status === 'needs_review';
+          const unknown = status === 'insufficient_data';
           const shown = visible(s);
-          const fill = !shown ? DIM : hatched ? REVIEW_NEAR : unknown ? UNKNOWN_BG : STATUS[s.status].fill;
+          const fill = !shown ? DIM : hatched ? REVIEW_NEAR : unknown ? UNKNOWN_BG
+            : view.mode === 'metric' ? metricFill((s.metrics || {})[view.metric]) : STATUS[status].fill;
           ids.push(s.ticker);
           labels.push(tileLabel(s));
           parents.push(`sector:${sector}`);
           values.push(s.spot_market_cap);
           colours.push(fill);
-          textColours.push(hatched ? REVIEW_NEAR_TEXT : unknown ? STATUS.insufficient_data.text : STATUS[s.status].text);
+          textColours.push(hatched ? REVIEW_NEAR_TEXT : unknown ? STATUS.insufficient_data.text : view.mode === 'metric' ? '#f5f6f8' : STATUS[status].text);
           const isSelected = s.ticker === selected;
-          lines.push(isSelected ? SELECT_LINE : near && s.status === 'pass' ? NEAR_LINE : TILE_GAP);
-          lineWidth.push(isSelected ? 3 : near && s.status === 'pass' ? 1.25 : 1);
+          lines.push(isSelected ? SELECT_LINE : near && status === 'pass' ? NEAR_LINE : TILE_GAP);
+          lineWidth.push(isSelected ? 3 : near && status === 'pass' ? 1.25 : 1);
           shape.push(hatched || unknown ? '/' : '');
           fg.push(hatched ? HATCH : unknown ? UNKNOWN_HATCH : HATCH);
           bg.push(fill);
@@ -292,7 +341,7 @@
           pattern: { shape, fgcolor: fg, bgcolor: bg, solidity },
         },
         hoverlabel: { bgcolor: 'rgba(0,0,0,0)', bordercolor: 'rgba(0,0,0,0)', font: { size: 1, color: 'rgba(0,0,0,0)' } },
-        textfont: { size: DISPLAY ? 16 : 13, color: textColours, family: '"Mirsad Mono", ui-monospace, monospace' },
+        textfont: { size: DISPLAY ? 16 : 13, color: textColours, family: '"Screener Mono", ui-monospace, monospace' },
         tiling: { pad: 2 },
         pathbar: { visible: false },
       };
@@ -300,7 +349,7 @@
         margin: { l: 0, r: 0, t: 0, b: 0 },
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
-        font: { family: '"Mirsad Condensed", sans-serif', color: PARENT_INK },
+        font: { family: '"Screener Condensed", sans-serif', color: PARENT_INK },
         uniformtext: { minsize: 9, mode: 'hide' },
       };
       // The kiosk is a display, not a tool: no mode bar.
@@ -335,7 +384,7 @@
   /* ---------- watchlist ---------- */
 
   // Pinned tickers are kept in this browser's storage. Nothing is sent anywhere.
-  const WATCH_KEY = 'halal-heatmap-watchlist';
+  const WATCH_KEY = 'equity-screener-watchlist';
   const loadWatch = () => {
     try { return new Set(JSON.parse(localStorage.getItem(WATCH_KEY) || '[]')); } catch (e) { return new Set(); }
   };
@@ -365,7 +414,8 @@
     const orders = {
       watch: byName,
       ticker: byName,
-      status: (a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || byName(a, b),
+      status: (a, b) => STATUS_ORDER.indexOf(st(a)) - STATUS_ORDER.indexOf(st(b)) || byName(a, b),
+      metric: (a, b) => ((b.metrics || {})[activeMetricKey()] ?? -Infinity) - ((a.metrics || {})[activeMetricKey()] ?? -Infinity) || byName(a, b),
       cap: (a, b) => (b.spot_market_cap || 0) - (a.spot_market_cap || 0) || byName(a, b),
       change: (a, b) => {
         const va = change(a); const vb = change(b);
@@ -385,17 +435,18 @@
   };
   // Exports only the fields the list shows, for the rows currently shown.
   function downloadCsv(list) {
-    const head = ['ticker', 'name', 'status', 'near_limit', 'interest_basis', 'lower_confidence', 'spot_market_cap',
-      'price_change_fraction', 'price_change_date', 'screen_date'];
+    const keys = [...catalog.keys()];
+    const head = ['ticker', 'name', 'sector', 'view_result', 'spot_market_cap', ...keys, 'price_change_fraction',
+      'price_change_date', 'screen_date'];
     const rows = list.map((s) => [
-      s.ticker, s.name, s.status, isNear(s) ? 'yes' : 'no', s.interest_income.key, lowerBasis(s) ? 'yes' : 'no',
-      s.spot_market_cap, s.daily_change ? s.daily_change.pct : '', s.daily_change ? s.daily_change.date : '', s.screen_date,
+      s.ticker, s.name, s.sector || '', st(s), s.spot_market_cap, ...keys.map((k) => ((s.metrics || {})[k] ?? '')),
+      s.daily_change ? s.daily_change.pct : '', s.daily_change ? s.daily_change.date : '', s.screen_date,
     ]);
     const text = [head, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
     const a = document.createElement('a');
     a.href = url;
-    a.download = `mirsad-${meta.screen_date}.csv`;
+    a.download = `equity-screen-${meta.screen_date}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -404,19 +455,29 @@
 
   function drawList(visibleStocks) {
     el.listBody.innerHTML = visibleStocks.map((s) => {
+      const key = activeMetricKey();
       const near = isNear(s) ? `<span class="mark" aria-hidden="true">◆</span> Yes` : 'No';
       const pinned = watch.has(s.ticker);
+      const middle = view.mode === 'reference'
+        ? `<td>${near}</td>
+        <td>${esc(BASIS[s.interest_income.key].short)}${lowerBasis(s) ? ' <span class="badge lower">lower confidence</span>' : ''}</td>`
+        : `<td class="num">${esc(metricText(key, (s.metrics || {})[key]))}</td><td class="num">${esc(metricText('market_cap', s.spot_market_cap))}</td>`;
       return `<tr>
         <td><button type="button" class="pin" data-pin="${esc(s.ticker)}" aria-pressed="${pinned}" aria-label="${pinned ? 'Unpin' : 'Pin'} ${esc(s.ticker)}">${pinned ? '★' : '☆'}</button></td>
         <td><button type="button" class="stock" data-ticker="${esc(s.ticker)}">${esc(s.ticker)}</button></td>
         <td>${esc(s.name)}</td>
-        <td>${badge(s.status)}</td>
-        <td>${near}</td>
-        <td>${esc(BASIS[s.interest_income.key].short)}${lowerBasis(s) ? ' <span class="badge lower">lower confidence</span>' : ''}</td>
+        <td>${badge(st(s))}</td>
+        ${middle}
         <td class="num">${s.daily_change ? esc(priceText(s.daily_change.pct)) : 'n/a'}</td>
       </tr>`;
     }).join('');
     el.listCount.textContent = visibleStocks.length;
+    const key = activeMetricKey();
+    $('list-head').innerHTML = `<th scope="col"><span class="visually-hidden">Pin</span></th><th scope="col">Ticker</th>
+      <th scope="col">Company</th><th scope="col">${view.mode === 'metric' ? 'Value' : 'Result'}</th>` + (view.mode === 'reference'
+      ? '<th scope="col">Near limit</th><th scope="col">Interest income basis</th>'
+      : `<th scope="col" class="num">${esc((catalog.get(key) || {}).label || key)}</th><th scope="col" class="num">Market cap</th>`)
+      + '<th scope="col" class="num">Last-close change</th>';
   }
 
   /* ---------- counts, chips and the refresh ---------- */
@@ -437,6 +498,8 @@
       ? `Showing ${shown.length} of ${members.length} stocks`
       : `Showing ${shown.length} of ${scoped.length} stocks in ${sectorFilter}`;
     el.reset.hidden = !filtersActive();
+    view.range = view.mode === 'metric' ? metricRange() : null;
+    drawCounts();
     drawTreemap();
     lastShown = sortStocks(listed);
     drawList(lastShown);
@@ -445,8 +508,15 @@
 
   // Status counts from the export. Each chip is the legend for its colour and a status filter.
   function drawCounts() {
-    const by = meta.counts.by_status;
-    el.counts.innerHTML = STATUS_CHIPS.map(([key, label, glyph]) =>
+    const by = {};
+    for (const s of members) by[st(s)] = (by[st(s)] || 0) + 1;
+    if (view.mode === 'metric') {
+      const r = view.range;
+      const scale = r ? ` · low ${metricText(view.metric, r.lo)} to high ${metricText(view.metric, r.hi)} (5th to 95th percentile)` : '';
+      el.counts.innerHTML = `<span class="muted">${esc((catalog.get(view.metric) || {}).label || view.metric)}: ${by.pass || 0} with a value, ${by.insufficient_data || 0} unavailable${esc(scale)}</span>`;
+      return;
+    }
+    el.counts.innerHTML = STATUS_CHIPS.filter(([key]) => view.mode === 'reference' || key !== 'needs_review').map(([key, label, glyph]) =>
       `<button type="button" class="chip st-${key}" data-status="${key}" aria-pressed="true"${DISPLAY ? ' disabled' : ''}>` +
       `<span class="chip-n">${by[key] ?? 0}</span><span class="chip-l"><span aria-hidden="true">${glyph}</span> ${label}</span></button>`).join('');
   }
@@ -509,7 +579,7 @@
     el.q.setAttribute('aria-expanded', 'true');
     el.qResults.innerHTML = cmdList.length
       ? cmdList.map((s, i) => `<li role="option" id="q-opt-${i}" data-ticker="${esc(s.ticker)}" aria-selected="${i === cmdActive}">` +
-        `<span class="res-t">${esc(s.ticker)}</span><span class="res-n">${esc(s.name)}</span>${badge(s.status)}</li>`).join('')
+        `<span class="res-t">${esc(s.ticker)}</span><span class="res-n">${esc(s.name)}</span>${badge(st(s))}</li>`).join('')
       : `<li class="res-none">No stock matches “${esc(query)}”</li>`;
     el.q.setAttribute('aria-activedescendant', cmdActive >= 0 ? `q-opt-${cmdActive}` : '');
   }
@@ -657,6 +727,132 @@
       </dl>`;
   }
 
+  function criteriaSummary(s) {
+    if (view.mode === 'metric') {
+      const m = catalog.get(view.metric) || {};
+      return `<p class="reason">${esc(m.label || view.metric)}: ${esc(metricText(view.metric, (s.metrics || {})[view.metric]))}. <span class="muted">${esc(m.description || '')}</span></p>`;
+    }
+    const outcome = Crit.evaluate(view.criteria, s.metrics || {});
+    const rows = outcome.results.map((r) => {
+      const m = catalog.get(r.criterion.metric) || {};
+      const need = `${esc(m.label || r.criterion.metric)} ${esc(r.criterion.op)} ${esc(metricText(r.criterion.metric, r.criterion.value))}`;
+      return `<tr><td>${need}</td><td class="num">${esc(metricText(r.criterion.metric, r.actual))}</td><td>${badge(r.status)}</td></tr>`;
+    }).join('');
+    return `<p class="reason muted">${esc(view.profile ? view.profile.name : 'Custom criteria')}</p>
+      <table class="mini"><thead><tr><th scope="col">Criterion</th><th scope="col" class="num">Actual</th><th scope="col">Result</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  function metricsTable(s) {
+    const metrics = s.metrics || {};
+    const groups = new Map();
+    for (const m of catalog.values()) {
+      if (!groups.has(m.group)) groups.set(m.group, []);
+      groups.get(m.group).push(m);
+    }
+    const body = [...groups.entries()].map(([group, list]) =>
+      `<tr class="group-row"><th scope="rowgroup" colspan="2">${esc(group)}</th></tr>` + list.map((m) =>
+        `<tr><td title="${esc(m.description)}">${esc(m.label)}</td><td class="num">${esc(metricText(m.key, metrics[m.key]))}</td></tr>`).join('')).join('');
+    const missing = [...catalog.keys()].filter((k) => metrics[k] == null).length;
+    return `<table class="mini"><tbody>${body}</tbody></table>
+      <p class="muted">Computed from reported figures in the filing named below. A metric is n/a when an input is not reported or its denominator is not positive${missing ? ` (${missing} here)` : ''}; nothing is estimated. Hover a metric for its definition.</p>`;
+  }
+
+  /* ---------- the view: criteria profile, single metric, or the reference ratio screen ---------- */
+
+  function criteriaRow(c, i) {
+    const metricOptions = [...catalog.values()].map((m) =>
+      `<option value="${esc(m.key)}"${m.key === c.metric ? ' selected' : ''}>${esc(m.label)}</option>`).join('');
+    const ops = ['<', '<=', '>', '>='].map((o) => `<option${o === c.op ? ' selected' : ''}>${o}</option>`).join('');
+    const unit = (catalog.get(c.metric) || {}).unit;
+    const shown = unit === 'ratio' ? c.value * 100 : c.value;
+    const suffix = unit === 'ratio' ? '%' : unit === 'multiple' ? 'x' : '$';
+    return `<div class="crit-row" data-i="${i}"><select data-f="metric" aria-label="Metric">${metricOptions}</select>
+      <select data-f="op" aria-label="Operator">${ops}</select>
+      <input data-f="value" type="number" step="any" value="${Number(shown.toPrecision(6))}" aria-label="Threshold (${suffix})"><span class="muted">${suffix}</span>
+      <button type="button" class="link" data-f="remove" aria-label="Remove criterion">✕</button></div>`;
+  }
+  function drawViewControls() {
+    $('view-mode').value = view.mode;
+    $('view-profile-wrap').hidden = view.mode !== 'profile';
+    $('view-metric-wrap').hidden = view.mode !== 'metric';
+    $('view-reference-note').hidden = view.mode !== 'reference';
+    $('criteria-editor').innerHTML = view.mode === 'profile' ? view.criteria.map(criteriaRow).join('') : '';
+    $('add-criterion').hidden = view.mode !== 'profile';
+    $('reset-criteria').hidden = view.mode !== 'profile';
+    $('view-description').textContent = view.mode === 'profile' && view.profile ? view.profile.description : '';
+    document.querySelector('.reference-only').hidden = view.mode !== 'reference';
+    document.querySelector('fieldset.status-filter').hidden = view.mode === 'metric';
+    el.nearOnly.closest('label').hidden = view.mode !== 'reference';
+    drawFooter();
+  }
+  function loadProfile(key) {
+    const profile = (meta.profiles || []).find((p) => p.key === key) || null;
+    view.profile = profile;
+    view.criteria = profile ? profile.criteria.map((c) => ({ ...c })) : [];
+  }
+  function applyView() {
+    setLabels();
+    drawViewControls();
+    refresh();
+    const url = new URL(location.href);
+    url.searchParams.set('view', view.mode);
+    if (view.mode === 'profile' && view.profile) url.searchParams.set('profile', view.profile.key); else url.searchParams.delete('profile');
+    if (view.mode === 'metric') url.searchParams.set('metric', view.metric); else url.searchParams.delete('metric');
+    history.replaceState(null, '', url);
+    if (selected) openDetail(selected);
+  }
+  function wireView() {
+    const modeSel = $('view-mode');
+    const profileSel = $('view-profile');
+    const metricSel = $('view-metric');
+    profileSel.innerHTML = (meta.profiles || []).map((p) => `<option value="${esc(p.key)}">${esc(p.name)}</option>`).join('');
+    const groups = new Map();
+    for (const m of catalog.values()) { if (!groups.has(m.group)) groups.set(m.group, []); groups.get(m.group).push(m); }
+    metricSel.innerHTML = [...groups.entries()].map(([g, list]) => `<optgroup label="${esc(g)}">` +
+      list.map((m) => `<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('') + '</optgroup>').join('');
+    modeSel.addEventListener('change', () => { view.mode = modeSel.value; applyView(); });
+    profileSel.addEventListener('change', () => { loadProfile(profileSel.value); applyView(); });
+    metricSel.addEventListener('change', () => { view.metric = metricSel.value; applyView(); });
+    $('reset-criteria').addEventListener('click', () => { loadProfile(profileSel.value); applyView(); });
+    $('add-criterion').addEventListener('click', () => {
+      view.criteria.push({ metric: 'roe', op: '>', value: 0.1 });
+      view.profile = null;
+      applyView();
+    });
+    $('criteria-editor').addEventListener('change', (ev) => {
+      const row = ev.target.closest('.crit-row');
+      if (!row) return;
+      const c = view.criteria[Number(row.dataset.i)];
+      const field = ev.target.dataset.f;
+      if (field === 'metric') c.metric = ev.target.value;
+      else if (field === 'op') c.op = ev.target.value;
+      else if (field === 'value') {
+        const raw = Number(ev.target.value);
+        if (!Number.isFinite(raw)) return;
+        c.value = (catalog.get(c.metric) || {}).unit === 'ratio' ? raw / 100 : raw;
+      }
+      view.profile = view.profile && { ...view.profile, name: `${view.profile.name} (edited)` };
+      applyView();
+    });
+    $('criteria-editor').addEventListener('click', (ev) => {
+      if (ev.target.dataset.f !== 'remove') return;
+      view.criteria.splice(Number(ev.target.closest('.crit-row').dataset.i), 1);
+      applyView();
+    });
+  }
+
+  function drawFooter() {
+    const list = view.mode === 'profile' ? view.criteria.map((c) => {
+      const m = catalog.get(c.metric) || {};
+      return `<li>${esc(m.label || c.metric)} ${esc(c.op)} ${esc(metricText(c.metric, c.value))}</li>`;
+    }) : view.mode === 'metric' ? [`<li>Colour: ${esc((catalog.get(view.metric) || {}).label || view.metric)}, scaled from the 5th to the 95th percentile of the index.</li>`]
+      : Object.values(meta.thresholds).map((t) => `<li>${esc(t.label)}: ${t.operator === '<' ? 'below' : 'at or below'} ${trimPct(t.limit)}</li>`);
+    el.thresholds.innerHTML = list.join('');
+    el.nearDesc.textContent = view.mode === 'reference'
+      ? `Near a limit: a passing ratio within ${marginText()} (${meta.near_threshold.mode} mode). Shown only for pass and needs review.`
+      : view.mode === 'profile' ? 'Criteria are applied in your browser to the exported metrics. Edits are not saved or sent anywhere.' : '';
+  }
+
   function openDetail(ticker) {
     const s = byTicker.get(ticker);
     if (!s) return;
@@ -680,8 +876,8 @@
         ${pinButton(s.ticker)}
       </div>
       <p class="sector muted">${esc(s.sector || 'No sector')} · ${esc(s.sub_industry || 'no sub-industry')}</p>
-      <div class="verdict">${badge(s.status)}${nearFlag}</div>
-      <p class="reason">${esc(s.reason)}</p>
+      <div class="verdict">${badge(st(s))}${nearFlag}</div>
+      ${view.mode === 'reference' ? `<p class="reason">${esc(s.reason)}</p>` : criteriaSummary(s)}
       ${flagChips(s)}
       <dl class="kv key-facts">
         <div><dt>Screen date</dt><dd>${esc(s.screen_date)}</dd></div>
@@ -689,7 +885,8 @@
         <div><dt>Driving market cap</dt><dd>${esc(s.market_cap.driving)}</dd></div>
         <div><dt>Last-close price change</dt><dd>${change}</dd></div>
       </dl>
-      ${section('Financial ratios', ratioTable(s), true, '3')}
+      ${section('Metrics', metricsTable(s), true, String(catalog.size))}
+      ${section('Reference ratio screen', `<p class="muted">Status under the ratio limits and industry exclusions in config.yaml: <b>${esc(REFERENCE_LABELS[s.status])}</b>. ${esc(s.reason)}</p>${ratioTable(s)}`)}
       ${section('Market cap', `${marketCapTable(s)}<p class="muted">Market cap is shares × closing price. The average covers ${esc(meta.market_cap.window_months[s.market_cap.driving] ?? '')} months of trading days, with at least ${pct(meta.market_cap.min_coverage, 0)} of them present.</p>`)}
       ${section('Interest income', interestBlock(s))}
       ${section('Inputs', `
@@ -713,7 +910,7 @@
           <dt>Period end</dt><dd>${esc(s.filing.period_end)}</dd>
           <dt>Accession</dt><dd>${s.filing.url ? `<a href="${esc(s.filing.url)}" rel="noopener">${esc(s.filing.accession)}</a>` : esc(s.filing.accession)}</dd>
         </dl>`)}
-      ${section('Business screen', `
+      ${section('Industry classification', `
         <p>${esc(s.business.result)}${s.business.category ? `, ${esc(s.business.category)}` : ''}. <span class="muted">${esc(s.business.rule)}</span></p>
         ${s.balance_sheet.post_balance_sheet_event ? `<p><b>Event after the balance sheet date:</b> ${esc(s.balance_sheet.post_balance_sheet_event)}</p>` : ''}
         ${s.spot_divergence.factor != null ? `<p class="muted">Spot and 12-month average market cap are ${number(s.spot_divergence.factor)}× apart.</p>` : ''}`)}
@@ -775,9 +972,8 @@
   /* ---------- banner, footer and header ---------- */
 
   function fillChrome() {
-    el.subtitle.textContent = `Screened as of ${meta.screen_date}.`;
+    el.subtitle.textContent = `Data as of ${meta.screen_date}. Filings: SEC EDGAR.`;
     el.statusAsof.textContent = meta.screen_date;
-    drawCounts();
     const notices = [];
     // A warning only: the page still shows the export. The threshold is a display constant, not screen data.
     const ageDays = (Date.now() - Date.parse(meta.screen_date)) / 86400000;
@@ -806,11 +1002,6 @@
       : '<tr><td colspan="4" class="muted">Every stock on the list has a current market cap.</td></tr>';
     el.unsized.hidden = unsized.length === 0;
     el.disclaimer.textContent = meta.disclaimer;
-    el.thresholds.innerHTML = Object.values(meta.thresholds).map((t) => {
-      const comparison = t.operator === '<' ? 'below' : 'at or below';
-      return `<li>${esc(t.label)}: ${esc(comparison)} ${trimPct(t.limit)}</li>`;
-    }).join('') + '<li>Impure income is interest income only.</li>';
-    el.nearDesc.textContent = `Near a limit: a passing ratio within ${marginText()} (${meta.near_threshold.mode} mode). Shown only for pass and needs review.`;
     const m = meta.market_cap;
     const driving = m.driving.startsWith('avg_')
       ? `${m.window_months[m.driving]}-month average of daily market cap`
@@ -967,9 +1158,21 @@
       if (DISPLAY) watchForNewExport(meta.generated_at);
       byTicker = new Map(screens.map((s) => [s.ticker, s]));
       members = screens.filter((s) => s.in_index);
+      catalog = new Map((meta.metric_catalog || []).map((m) => [m.key, m]));
+      const wanted = PARAMS.get('view');
+      view.mode = ['profile', 'metric', 'reference'].includes(wanted) ? wanted : 'profile';
+      if (PARAMS.get('metric') && catalog.has(PARAMS.get('metric'))) view.metric = PARAMS.get('metric');
+      const profiles = meta.profiles || [];
+      loadProfile(PARAMS.get('profile') || (profiles.find((p) => p.key === 'quality') || profiles[0] || {}).key);
+      if (!catalog.size || (view.mode === 'profile' && !view.profile)) view.mode = 'reference';  // an export without metrics
       fillSectorSelector();
       fillChrome();
       wire();
+      wireView();
+      $('view-profile').value = view.profile ? view.profile.key : '';
+      $('view-metric').value = view.metric;
+      setLabels();
+      drawViewControls();
       readFilters();
       el.app.hidden = false;
       refresh();

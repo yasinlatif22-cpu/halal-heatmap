@@ -28,7 +28,7 @@ class _Quiet(http.server.SimpleHTTPRequestHandler):
 @pytest.fixture(scope="module")
 def site():
     if not (WEB / "data" / "screens.json").exists():
-        pytest.skip("no exported data: run halal-heatmap export first")
+        pytest.skip("no exported data: run equity-screener export first")
     handler = functools.partial(_Quiet, directory=str(WEB))
     server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -253,7 +253,7 @@ def test_the_tool_loads_its_own_fonts_and_nothing_from_a_third_party(site, page)
             return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family); }""")
     finally:
         page.remove_listener("request", record)
-    assert "Mirsad Mono" in loaded and "Mirsad Condensed" in loaded
+    assert "Screener Mono" in loaded and "Screener Condensed" in loaded
     assert hosts == {"127.0.0.1"}, hosts
 
 
@@ -393,7 +393,7 @@ def test_landing_loads_its_own_fonts(site, page):
     page.wait_for_timeout(500)
     loaded = page.evaluate("""async () => { await document.fonts.ready;
         return [...document.fonts].filter((f) => f.status === 'loaded').map((f) => f.family); }""")
-    assert "Mirsad Condensed" in loaded and "Mirsad Mono" in loaded, loaded
+    assert "Screener Condensed" in loaded and "Screener Mono" in loaded, loaded
 
 
 @pytest.mark.parametrize("width,height", [(375, 812), (390, 844)])

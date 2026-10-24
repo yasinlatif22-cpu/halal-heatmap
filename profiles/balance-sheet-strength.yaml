@@ -1,0 +1,6 @@
+name: Balance-sheet strength
+description: Moderate leverage and cash-generative operations. Illustrative thresholds, not a recommendation.
+criteria:
+  - {metric: debt_to_equity, op: "<", value: 1.0}
+  - {metric: interest_coverage, op: ">", value: 5}
+  - {metric: fcf_margin, op: ">", value: 0.0}

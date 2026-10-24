@@ -53,7 +53,7 @@ def test_tool_has_the_stale_warning_and_the_reload_on_a_new_export():
 
 def test_csv_export_and_watchlist_only_use_fields_the_list_shows():
     js = (TOOL / "app.js").read_text()
-    assert "halal-heatmap-watchlist" in js
+    assert "equity-screener-watchlist" in js
     assert "price_change_fraction" in js
     assert "Pinned tickers stay at the top" in (TOOL / "index.html").read_text()
 
@@ -75,19 +75,23 @@ def test_no_third_party_requests_from_the_tool():
 def test_social_tags_name_the_product_and_keep_the_research_aid_wording():
     for name in ("index.html", "tool/index.html"):
         html = (WEB / name).read_text()
-        assert 'property="og:title" content="Mirsad' in html, name
+        assert 'property="og:title" content="Equity Screener' in html, name
         assert 'property="og:type" content="website"' in html, name
         assert 'name="twitter:card" content="summary"' in html, name
         # no og:url or og:image: a crawler would fetch them, and the page makes no third-party requests
         assert 'og:url' not in html and 'og:image' not in html, name
     for name in ("index.html", "tool/index.html"):
-        assert "not a fatwa" in (WEB / name).read_text().lower(), name
+        assert "not investment advice" in (WEB / name).read_text().lower(), name
 
 
-def test_the_product_name_is_mirsad_everywhere_user_facing():
+def test_the_product_name_is_consistent_and_unbranded_everywhere_user_facing():
     for name in ("index.html", "tool/index.html", "tool/app.js", "tool/style.css", "fonts.css"):
         assert "Mizan" not in (WEB / name).read_text(), name
     assert "Mizan" not in (WEB.parent / "README.md").read_text()
+    for name in ("index.html", "tool/index.html", "tool/app.js"):
+        text = (WEB / name).read_text().lower()
+        for word in ("mirsad", "shariah", "shari'ah", "aaoifi", "halal", "fatwa"):
+            assert word not in text, (name, word)
 
 
 def test_runtime_failures_are_visible_and_reload_is_available():
@@ -112,7 +116,7 @@ async function check(mode, expected) {
       hidden: true, value: '', checked: false, textContent: '', innerHTML: '', offsetHeight: 30,
       handlers: {}, classList: { add() {}, toggle() {}, contains() { return false; } },
       addEventListener(event, handler) { this.handlers[event] = handler; },
-      setAttribute() {}, removeAttribute() {}, querySelectorAll() { return []; },
+      setAttribute() {}, removeAttribute() {}, querySelectorAll() { return []; }, closest() { return get('closest'); },
       on() {},
     });
     return nodes.get(id);

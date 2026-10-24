@@ -10,12 +10,12 @@ from datetime import date
 import pytest
 
 from conftest import companyfacts, fact, trading_days
-from halal_heatmap.changes import crossings, diff_results
-from halal_heatmap.cli import format_change
-from halal_heatmap.config import parse_config
-from halal_heatmap.overrides import Override
-from halal_heatmap.pipeline import screen_constituent
-from halal_heatmap.runner import (
+from equity_screener.changes import crossings, diff_results
+from equity_screener.cli import format_change
+from equity_screener.config import parse_config
+from equity_screener.overrides import Override
+from equity_screener.pipeline import screen_constituent
+from equity_screener.runner import (
     ForwardOnlyError,
     detect_due,
     monthly_due,
@@ -24,11 +24,11 @@ from halal_heatmap.runner import (
     supersede_run,
     update,
 )
-from halal_heatmap.screen.engine import result_to_record
-from halal_heatmap.sources import SourceError
-from halal_heatmap.sources.prices import PriceHistory
-from halal_heatmap.sources.wikipedia import Constituent
-from halal_heatmap.store import RESULT_COLUMNS, Store
+from equity_screener.screen.engine import result_to_record
+from equity_screener.sources import SourceError
+from equity_screener.sources.prices import PriceHistory
+from equity_screener.sources.wikipedia import Constituent
+from equity_screener.store import RESULT_COLUMNS, Store
 
 HORIZON = date(2026, 12, 31)  # the fixture world's sources know everything up to here
 PERIODIC = (  # key, form, period end, filed, quarters of the year reported
@@ -692,7 +692,7 @@ def test_replay_over_the_fixture_timeline(world, cfg, stricter, raw, store):
 
 def test_closes_on_or_after_the_screen_date_are_dropped_before_any_use():
     """Market caps filter by date themselves; this keeps every other reader of the closes safe too."""
-    from halal_heatmap.pipeline import _completed
+    from equity_screener.pipeline import _completed
 
     history = PriceHistory([(date(2026, 7, 9), 100.0), (date(2026, 7, 10), 70.0)], [(date(2026, 8, 1), 2.0)])
     assert _completed(history, date(2026, 7, 10)) == PriceHistory([(date(2026, 7, 9), 100.0)], history.splits)

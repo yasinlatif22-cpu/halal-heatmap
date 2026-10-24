@@ -18,8 +18,8 @@
   --pass-ink: #4ade80;
   --review-ink: #fbbf24;
   --fail-ink: #f87171;
-  --mono: "Mirsad Mono", ui-monospace, Menlo, monospace;
-  --cond: "Mirsad Condensed", "Arial Narrow", sans-serif;
+  --mono: "Screener Mono", ui-monospace, Menlo, monospace;
+  --cond: "Screener Condensed", "Arial Narrow", sans-serif;
   --status-h: 30px;
   --chrome: 124px;   /* header plus status line: the map fills the rest of the first screen */
 }
@@ -295,3 +295,13 @@ th { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacin
   .kiosk .bar1, .kiosk .bar2 { height: auto; }
 }
 
+
+/* View controls and metric tables */
+.view .field { margin-bottom: .6rem; }
+.criteria-editor { display: grid; gap: .35rem; margin: .5rem 0; }
+.crit-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.4rem 5.5rem auto auto; gap: .3rem; align-items: center; }
+.crit-row select, .crit-row input { min-width: 0; }
+table.mini { width: 100%; border-collapse: collapse; font-size: .85rem; }
+table.mini td, table.mini th { padding: .2rem .35rem; border-bottom: 1px solid rgba(128, 136, 148, .25); text-align: left; }
+table.mini .num { text-align: right; font-variant-numeric: tabular-nums; }
+table.mini .group-row th { padding-top: .6rem; color: var(--ink-dim, #9aa3af); font-weight: 600; text-transform: uppercase; font-size: .7rem; letter-spacing: .04em; }

@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from halal_heatmap.config import parse_config
-from halal_heatmap.marketcap import MarketCap
-from halal_heatmap.screen.engine import FilingRef, ScreenInputs
+from equity_screener.config import parse_config
+from equity_screener.marketcap import MarketCap
+from equity_screener.screen.engine import FilingRef, ScreenInputs
 
 ROOT = Path(__file__).resolve().parents[1]
 SCREEN_DATE = date(2026, 10, 1)

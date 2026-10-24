@@ -1,0 +1,6 @@
+name: Profitable and efficient
+description: Positive, above-threshold margins and returns on equity. Illustrative thresholds, not a recommendation.
+criteria:
+  - {metric: operating_margin, op: ">", value: 0.15}
+  - {metric: roe, op: ">", value: 0.12}
+  - {metric: net_margin, op: ">", value: 0.08}

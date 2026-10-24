@@ -12,7 +12,7 @@ USD millions, as each filing reports them for the period:
 from datetime import date
 
 from conftest import companyfacts, fact
-from halal_heatmap.facts import CompanyFacts, resolve_input
+from equity_screener.facts import CompanyFacts, resolve_input
 
 M = 1_000_000
 END = date(2026, 6, 30)

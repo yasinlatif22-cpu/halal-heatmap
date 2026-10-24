@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "halal-heatmap"
+name = "equity-screener"
 version = "0.1.0"
-description = "AAOIFI-based Shariah screen of S&P 500 stocks with an auditable trail"
+description = "Configurable fundamental screens and heatmap of S&P 500 stocks, built from SEC filings with an audit trail"
 requires-python = ">=3.10"
 dependencies = [
     "PyYAML>=6",
@@ -17,7 +17,7 @@ dependencies = [
 dev = ["pytest>=8", "ruff>=0.5", "playwright>=1.40"]
 
 [project.scripts]
-halal-heatmap = "halal_heatmap.cli:main"
+equity-screener = "equity_screener.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

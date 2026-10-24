@@ -9,15 +9,14 @@ LANDING = (WEB / "index.html").read_text()
 
 def test_the_notice_says_what_the_tool_is_not_near_the_top():
     head = LANDING[: LANDING.index('<main>')]
-    assert "An automated screen, not a fatwa or a certification." in head
-    assert "not yet been verified against the AAOIFI primary text" in head
-    assert "AAOIFI-compliant" not in LANDING and "halal-certified" not in LANDING.lower()
+    assert "A research tool, not investment advice." in head
+    assert "illustrative thresholds, not recommendations" in head
 
 
 def test_the_footer_disclaimer_says_the_rest():
     footer = LANDING[LANDING.index('<footer'):]
-    for phrase in ("automated research aid", "not a fatwa", "not a religious ruling", "not a certification",
-                   "not investment advice", "Consult a qualified scholar"):
+    for phrase in ("automated research tool", "not investment advice", "does not recommend any security",
+                   "Read the filing behind any figure"):
         assert phrase in footer, phrase
 
 
@@ -39,10 +38,10 @@ def test_no_em_dashes_or_en_dashes_in_the_copy():
     assert "&mdash;" not in LANDING and "&ndash;" not in LANDING
 
 
-def test_the_landing_uses_the_mirsad_fonts_and_loads_no_other_host():
+def test_the_landing_uses_the_bundled_fonts_and_loads_no_other_host():
     assert '<link rel="stylesheet" href="fonts.css">' in LANDING
     css = (WEB / "landing.css").read_text()
-    assert "Mirsad Mono" in css and "Mirsad Condensed" in css
+    assert "Screener Mono" in css and "Screener Condensed" in css
     assert "IBM Plex" not in css and "IBM Plex" not in LANDING
     for text in (LANDING, css):
         assert "googleapis" not in text and "gstatic" not in text and "cdn" not in text.lower()

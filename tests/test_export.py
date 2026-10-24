@@ -6,13 +6,13 @@ from datetime import date
 
 import pytest
 
-from halal_heatmap.config import parse_config
-from halal_heatmap.export import _interest_basis, build_site, daily_changes, reviewer_labels, scrub_text, write_site
-from halal_heatmap.overrides import Override
-from halal_heatmap.runner import run_screen, supersede_run
-from halal_heatmap.sources import SourceError
-from halal_heatmap.sources.prices import PriceHistory
-from halal_heatmap.store import Store
+from equity_screener.config import parse_config
+from equity_screener.export import _interest_basis, build_site, daily_changes, reviewer_labels, scrub_text, write_site
+from equity_screener.overrides import Override
+from equity_screener.runner import run_screen, supersede_run
+from equity_screener.sources import SourceError
+from equity_screener.sources.prices import PriceHistory
+from equity_screener.store import Store
 from test_history import Company, World
 
 EMAIL_PATTERN = r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"

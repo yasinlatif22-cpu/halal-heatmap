@@ -2,9 +2,9 @@
 
 import pytest
 
-from halal_heatmap.config import DebtPlausibility, NearThreshold, Threshold, ZeroDebt
-from halal_heatmap.screen.business import screen_business
-from halal_heatmap.screen.financial import DebtResolution, check_debt_plausibility, evaluate_ratio, resolve_debt
+from equity_screener.config import DebtPlausibility, NearThreshold, Threshold, ZeroDebt
+from equity_screener.screen.business import screen_business
+from equity_screener.screen.financial import DebtResolution, check_debt_plausibility, evaluate_ratio, resolve_debt
 
 NEAR = NearThreshold("relative", 0.10)
 ZERO = ZeroDebt(0.001, 460)

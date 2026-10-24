@@ -14,7 +14,7 @@ Values are from each company's filing for the period, in USD millions, as the fi
 from datetime import date
 
 from conftest import companyfacts, fact
-from halal_heatmap.facts import CompanyFacts, resolve_input
+from equity_screener.facts import CompanyFacts, resolve_input
 
 M = 1_000_000
 

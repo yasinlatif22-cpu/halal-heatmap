@@ -1,0 +1,8 @@
+[
+  {"name": "all met", "profile": {"name": "c", "criteria": [{"metric": "roe", "op": ">", "value": 0.1}, {"metric": "debt_to_equity", "op": "<", "value": 1}]}, "metrics": {"roe": 0.2, "debt_to_equity": 0.4}, "expected": "pass"},
+  {"name": "one failed", "profile": {"name": "c", "criteria": [{"metric": "roe", "op": ">", "value": 0.1}, {"metric": "debt_to_equity", "op": "<", "value": 1}]}, "metrics": {"roe": 0.2, "debt_to_equity": 1.5}, "expected": "fail"},
+  {"name": "strict boundary fails", "profile": {"name": "c", "criteria": [{"metric": "roe", "op": ">", "value": 0.1}]}, "metrics": {"roe": 0.1}, "expected": "fail"},
+  {"name": "inclusive boundary passes", "profile": {"name": "c", "criteria": [{"metric": "roe", "op": ">=", "value": 0.1}]}, "metrics": {"roe": 0.1}, "expected": "pass"},
+  {"name": "missing is insufficient", "profile": {"name": "c", "criteria": [{"metric": "roe", "op": ">", "value": 0.1}]}, "metrics": {"roe": null}, "expected": "insufficient_data"},
+  {"name": "fail beats missing", "profile": {"name": "c", "criteria": [{"metric": "roe", "op": ">", "value": 0.1}, {"metric": "fcf_yield", "op": ">", "value": 0.0}]}, "metrics": {"roe": 0.0, "fcf_yield": null}, "expected": "fail"}
+]

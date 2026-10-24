@@ -18,8 +18,8 @@
   --pass-ink: #4ade80;
   --review-ink: #fbbf24;
   --fail-ink: #f87171;
-  --mono: "Mirsad Mono", ui-monospace, Menlo, monospace;
-  --cond: "Mirsad Condensed", "Arial Narrow", sans-serif;
+  --mono: "Screener Mono", ui-monospace, Menlo, monospace;
+  --cond: "Screener Condensed", "Arial Narrow", sans-serif;
 }
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
